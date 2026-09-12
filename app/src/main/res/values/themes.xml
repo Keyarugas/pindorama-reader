@@ -88,6 +88,43 @@
     <!--== Default Theme ==-->
     <style name="Theme.Tachiyomi" parent="Base.Theme.Tachiyomi" />
 
+    <!--== Pindorama Theme ==-->
+    <style name="Theme.Tachiyomi.Pindorama">
+        <item name="colorPrimary">@color/pindorama_primary</item>
+        <item name="colorOnPrimary">@color/pindorama_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/pindorama_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/pindorama_onPrimaryContainer</item>
+        <item name="colorPrimaryInverse">@color/pindorama_inversePrimary</item>
+        <item name="colorSecondary">@color/pindorama_secondary</item>
+        <item name="colorOnSecondary">@color/pindorama_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/pindorama_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/pindorama_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/pindorama_tertiary</item>
+        <item name="colorOnTertiary">@color/pindorama_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/pindorama_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/pindorama_onTertiaryContainer</item>
+        <item name="android:colorBackground">@color/pindorama_background</item>
+        <item name="colorOnBackground">@color/pindorama_onBackground</item>
+        <item name="colorSurface">@color/pindorama_surface</item>
+        <item name="colorOnSurface">@color/pindorama_onSurface</item>
+        <item name="colorSurfaceVariant">@color/pindorama_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/pindorama_onSurfaceVariant</item>
+        <item name="elevationOverlayColor">@color/pindorama_surfaceTint</item>
+        <item name="colorSurfaceInverse">@color/pindorama_inverseSurface</item>
+        <item name="colorOnSurfaceInverse">@color/pindorama_inverseOnSurface</item>
+        <item name="colorError">@color/pindorama_error</item>
+        <item name="colorOnError">@color/pindorama_onError</item>
+        <item name="colorErrorContainer">@color/pindorama_errorContainer</item>
+        <item name="colorOnErrorContainer">@color/pindorama_onErrorContainer</item>
+        <item name="colorOutline">@color/pindorama_outline</item>
+        <item name="colorOutlineVariant">@color/pindorama_outlineVariant</item>
+        <item name="colorSurfaceContainerLowest">@color/pindorama_surfaceContainerLowest</item>
+        <item name="colorSurfaceContainerLow">@color/pindorama_surfaceContainerLow</item>
+        <item name="colorSurfaceContainer">@color/pindorama_surfaceContainer</item>
+        <item name="colorSurfaceContainerHigh">@color/pindorama_surfaceContainerHigh</item>
+        <item name="colorSurfaceContainerHighest">@color/pindorama_surfaceContainerHighest</item>
+    </style>
+
     <!-- Monet theme only support S+ -->
     <style name="Theme.Tachiyomi.Monet" />
 
