@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import tachiyomi.core.common.util.system.DiagnosticSanitizer
 import java.io.File
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -39,7 +40,8 @@ class NetworkHelper(
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
 
         if (preferences.verboseLogging.get()) {
-            val httpLoggingInterceptor = HttpLoggingInterceptor().apply {
+            val httpLoggingInterceptor = HttpLoggingInterceptor(DiagnosticHttpLogger()).apply {
+                DiagnosticSanitizer.sensitiveHeaders.forEach(::redactHeader)
                 level = HttpLoggingInterceptor.Level.HEADERS
             }
             builder.addNetworkInterceptor(httpLoggingInterceptor)
