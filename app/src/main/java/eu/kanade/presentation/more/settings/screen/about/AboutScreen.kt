@@ -74,11 +74,13 @@ object AboutScreen : Screen() {
         val navigator = LocalNavigator.currentOrThrow
         var isCheckingUpdates by remember { mutableStateOf(false) }
         val crashLogUtil = remember { context.appGraph.crashLogUtil }
+        val appName = stringResource(MR.strings.app_name)
+        val forkDescription = stringResource(MR.strings.pindorama_about)
 
         Scaffold(
             topBar = { scrollBehavior ->
                 AppBar(
-                    title = stringResource(MR.strings.pref_category_about),
+                    title = "$appName · ${stringResource(MR.strings.pref_category_about)}",
                     navigateUp = if (handleBack != null) handleBack::invoke else null,
                     scrollBehavior = scrollBehavior,
                 )
@@ -96,7 +98,7 @@ object AboutScreen : Screen() {
                 item {
                     TextPreferenceWidget(
                         title = stringResource(MR.strings.version),
-                        subtitle = getVersionName(withBuildDate = true),
+                        subtitle = "${getVersionName(withBuildDate = true)}\n$forkDescription",
                         onPreferenceClick = {
                             val deviceInfo = crashLogUtil.getDebugInfo()
                             context.copyToClipboard("Debug information", deviceInfo)
@@ -143,7 +145,7 @@ object AboutScreen : Screen() {
                     }
                 }
 
-                if (!BuildConfig.DEBUG) {
+                if (!BuildConfig.DEBUG && updaterEnabled) {
                     item {
                         TextPreferenceWidget(
                             title = stringResource(MR.strings.whats_new),
@@ -161,7 +163,7 @@ object AboutScreen : Screen() {
 
                 item {
                     TextPreferenceWidget(
-                        title = stringResource(MR.strings.privacy_policy),
+                        title = "Mihon: ${stringResource(MR.strings.privacy_policy)}",
                         onPreferenceClick = { uriHandler.openUri("https://mihon.app/privacy/") },
                     )
                 }
@@ -243,7 +245,7 @@ object AboutScreen : Screen() {
     fun getVersionName(withBuildDate: Boolean): String {
         return when {
             BuildConfig.DEBUG -> {
-                "Debug ${BuildConfig.COMMIT_SHA}".let {
+                "v${BuildConfig.VERSION_NAME} (${BuildConfig.COMMIT_SHA})".let {
                     if (withBuildDate) {
                         "$it (${getFormattedBuildTime()})"
                     } else {

@@ -135,7 +135,7 @@ fun MoreScreen(
             }
             item {
                 TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_support_us),
+                    title = "Mihon: ${stringResource(MR.strings.label_support_us)}",
                     icon = MaterialSymbols.Rounded.VolunteerActivism,
                     onPreferenceClick = onClickSupport,
                 )

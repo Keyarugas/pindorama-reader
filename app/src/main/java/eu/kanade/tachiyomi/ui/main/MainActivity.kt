@@ -383,7 +383,7 @@ class MainActivity : BaseActivity() {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = stringResource(MR.strings.donationCampaign_title),
+                            text = "Mihon: ${stringResource(MR.strings.donationCampaign_title)}",
                             color = MaterialTheme.colorScheme.primary,
                             style = MaterialTheme.typography.headlineSmall,
                         )
@@ -422,7 +422,7 @@ class MainActivity : BaseActivity() {
                                 contentDescription = null,
                             )
                             Text(
-                                text = stringResource(MR.strings.label_support_us),
+                                text = "Mihon: ${stringResource(MR.strings.label_support_us)}",
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
                         }

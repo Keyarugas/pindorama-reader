@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Mihon</string>
+    <string name="app_name" translatable="false">Pindorama!</string>
+    <string name="pindorama_about" translatable="false">Personal fork of Mihon. Links below refer to the original project.</string>
 
     <!-- Generic strings -->
     <string name="on">On</string>
