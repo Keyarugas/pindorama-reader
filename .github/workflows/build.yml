@@ -11,7 +11,7 @@ on:
       - 'i18n/src/commonMain/moko-resources/base/plurals.xml'
   push:
     branches:
-      - pindorama/main
+      - main
 
   workflow_dispatch:
 
