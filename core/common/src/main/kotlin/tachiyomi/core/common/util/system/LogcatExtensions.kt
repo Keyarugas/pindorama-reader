@@ -14,5 +14,5 @@ inline fun Any.logcat(
         if (msg.isNotBlank()) msg += "\n"
         msg += throwable.asLog()
     }
-    msg
+    DiagnosticSanitizer.sanitize(msg)
 }

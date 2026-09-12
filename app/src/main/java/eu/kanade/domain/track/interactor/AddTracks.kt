@@ -100,7 +100,7 @@ class AddTracks(
                         logcat(
                             LogPriority.WARN,
                             e,
-                        ) { "Could not match manga: ${manga.title} with service $service" }
+                        ) { "Could not match mangaId=${manga.id} with service $service" }
                     }
                 }
         }

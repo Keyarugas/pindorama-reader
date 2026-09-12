@@ -48,6 +48,7 @@ import mihon.domain.source.interactor.UpdateMangaFromRemote
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.core.common.util.system.DiagnosticSanitizer
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.model.Chapter
@@ -230,7 +231,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             logcat {
                 skippedUpdates
                     .groupBy { it.second }
-                    .map { (reason, entries) -> "$reason: [${entries.map { it.first.title }.sorted().joinToString()}]" }
+                    .map { (reason, entries) -> "$reason: [${entries.map { it.first.id }.sorted().joinToString()}]" }
                     .joinToString()
             }
         }
@@ -398,12 +399,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     //   # Source
                     //     - Manga
                     errors.groupBy({ it.second }, { it.first }).forEach { (error, mangas) ->
-                        out.write("\n! ${error}\n")
+                        out.write("\n! ${DiagnosticSanitizer.sanitize(error.orEmpty())}\n")
                         mangas.groupBy { it.source }.forEach { (srcId, mangas) ->
-                            val source = sourceManager.getOrStub(srcId)
-                            out.write("  # $source\n")
+                            out.write("  # sourceId=$srcId\n")
                             mangas.forEach { manga ->
-                                out.write("    - ${manga.title}\n")
+                                out.write("    - mangaId=${manga.id}\n")
                             }
                         }
                     }
