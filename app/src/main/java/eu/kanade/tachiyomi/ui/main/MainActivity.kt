@@ -422,7 +422,7 @@ class MainActivity : BaseActivity() {
                                 contentDescription = null,
                             )
                             Text(
-                                text = "Mihon: ${stringResource(MR.strings.label_support_us)}",
+                                text = stringResource(MR.strings.support_mihon),
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
                         }

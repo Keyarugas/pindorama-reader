@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="pindorama_about">Pindorama! é um fork do Mihon. Os links abaixo são do projeto original.</string>
+    <string name="support_mihon">Apoie o Mihon</string>
     <string name="name">Nome</string>
     <string name="categories">Categorias</string>
     <string name="manga">Itens da biblioteca</string>
