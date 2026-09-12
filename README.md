@@ -1,56 +1,79 @@
-<div align="center">
+# Pindorama!
 
-<a href="https://mihon.app">
-    <img src="./.github/assets/logo.png" alt="Mihon logo" title="Mihon logo" width="80"/>
-</a>
+Um leitor Android de mangás, manhwas, webtoons e conteúdo compatível, baseado no Mihon.
 
-# Mihon [App](#)
+**Status: Alpha · Android 8.0 ou superior · Apache 2.0**
 
-### Full-featured reader
-Discover and read manga, webtoons, comics, and more – easier than ever on your Android device.
+Pindorama! é um fork independente do [Mihon](https://github.com/mihonapp/mihon).
+Não é afiliado nem oficialmente mantido pela equipe Mihon. Mihon continua sendo
+o projeto original, ao qual pertencem os créditos do trabalho herdado.
+O projeto preserva a licença [Apache 2.0](LICENSE).
 
-[![Discord server](https://img.shields.io/discord/1195734228319617024.svg?label=&labelColor=6A7EC2&color=7389D8&logo=discord&logoColor=FFFFFF)](https://discord.gg/mihon)
-[![GitHub downloads](https://img.shields.io/github/downloads/mihonapp/mihon/total?label=downloads&labelColor=27303D&color=0D1117&logo=github&logoColor=FFFFFF&style=flat)](https://mihon.app/download)
+O Pindorama ainda está em desenvolvimento. Esta versão Alpha pode conter falhas;
+mantenha backups da sua biblioteca antes de testar novas versões.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/mihonapp/mihon/build.yml?labelColor=27303D)](https://github.com/mihonapp/mihon/actions/workflows/build_push.yml)
-[![License: Apache-2.0](https://img.shields.io/github/license/mihonapp/mihon?labelColor=27303D&color=0877d2)](/LICENSE)
-[![Translation status](https://img.shields.io/weblate/progress/mihon?labelColor=27303D&color=946300)](https://hosted.weblate.org/engage/mihon/)
+## Recursos herdados do Mihon
 
-## Download
+- Leitura de conteúdo local e leitor configurável, com diferentes modos e direções de leitura.
+- Biblioteca organizada em categorias e atualização programada de capítulos.
+- Temas claros e escuros e criação/restauração de backups.
+- Integração com serviços de acompanhamento, como MyAnimeList, AniList, Kitsu e MangaUpdates.
+- Compatibilidade com extensões do ecossistema herdado do Mihon.
 
-[![Mihon Stable](https://img.shields.io/github/release/mihonapp/mihon.svg?maxAge=3600&label=Stable&labelColor=06599d&color=043b69)](https://mihon.app/download)
-[![Mihon Beta](https://img.shields.io/github/v/release/mihonapp/mihon-preview.svg?maxAge=3600&label=Beta&labelColor=2c2c47&color=1c1c39)](https://mihon.app/download)
+## O que muda no Pindorama
 
-*Requires Android 8.0 or higher.*
+- Identidade própria, com applicationId base `app.pindorama.reader`.
+- Tema Pindorama como padrão quando não existe uma preferência de tema salva.
+- Branding próprio, com símbolo de palmeira/livro no launcher, splash e cabeçalhos.
+- Build sem Firebase Analytics e Crashlytics: a implementação de telemetria é inativa.
+- Atualizador automático do Mihon desabilitado; não há atualizador próprio nesta etapa.
+- Ajuste da dependência FlexibleAdapter para um artefato disponível no Maven Central.
 
-## Features
+## Fontes, extensões e privacidade
 
-<div align="left">
+Extensões e fontes são componentes externos e não fazem parte do Pindorama.
+O aplicativo não fornece nem hospeda conteúdo. Disponibilidade e funcionamento de
+cada extensão dependem dos seus mantenedores e do serviço acessado; a compatibilidade
+com o ecossistema não garante o funcionamento de todas as extensões.
 
-* Local reading of content.
-* A configurable reader with multiple viewers, reading directions and other settings.
-* Tracker support: [MangaBaka](https://mangabaka.org), [MyAnimeList](https://myanimelist.net/), [AniList](https://anilist.co/), [Kitsu](https://kitsu.app/), [MangaUpdates](https://mangaupdates.com), [Shikimori](https://shikimori.one), [Bangumi](https://bgm.tv/), and [Hikka](https://hikka.io/) support.
-* Categories to organize your library.
-* Light and dark themes.
-* Schedule updating your library for new chapters.
-* Create backups locally to read offline or to your desired cloud service.
-* Plus much more...
+A ausência de Firebase Analytics/Crashlytics não impede conexões necessárias às
+fontes e aos serviços de acompanhamento que você utiliza. Esses componentes e
+serviços externos possuem suas próprias práticas de privacidade.
 
-</div>
+## Distribuição e desenvolvimento
 
-## Contributing
+Ainda não há uma URL pública de distribuição definida neste documento.
+Os APKs debug gerados pela CI são artefatos de teste, não releases de distribuição.
+A assinatura e a automação de releases próprias ainda precisam ser configuradas.
 
-[Code of conduct](./CODE_OF_CONDUCT.md) · [Contributing guide](./CONTRIBUTING.md)
+Placeholder da futura URL: `https://github.com/OWNER/REPOSITORY`.
+Substitua `OWNER` e `REPOSITORY` depois de definir o repositório pessoal; nenhum
+badge de CI ou download aponta para o Mihon como se fosse uma versão do Pindorama.
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+Para compilar, use JDK 21 e o Android SDK configurado no ambiente:
 
-Before reporting a new issue, take a look at the [FAQ](https://mihon.app/docs/faq/general), the [changelog](https://mihon.app/changelogs/) and the already opened [issues](https://github.com/mihonapp/mihon/issues); if you got any questions, join our [Discord server](https://discord.gg/mihon).
+```sh
+./gradlew spotlessCheck
+./gradlew testDebugUnitTest
+./gradlew :app:assembleDebug
+```
 
+Consulte [CONTRIBUTING.md](CONTRIBUTING.md) e o
+[Código de Conduta](CODE_OF_CONDUCT.md). Bugs e contribuições do Pindorama devem
+ser encaminhados às Issues e Pull Requests deste repositório.
 
-### Repositories
+## Relação com o projeto original
 
-[![mihonapp/website - GitHub](https://github-stats-extended.vercel.app/api/pin/?username=mihonapp&repo=website&bg_color=161B22&text_color=c9d1d9&title_color=0877d2&icon_color=0877d2&border_radius=8&hide_border=true&description_lines_count=2)](https://github.com/mihonapp/website/)
-[![mihonapp/bitmap.kt - GitHub](https://github-stats-extended.vercel.app/api/pin/?username=mihonapp&repo=bitmap.kt&bg_color=161B22&text_color=c9d1d9&title_color=0877d2&icon_color=0877d2&border_radius=8&hide_border=true&description_lines_count=2)](https://github.com/mihonapp/bitmap.kt/)
+O remoto `upstream` identifica [mihonapp/mihon](https://github.com/mihonapp/mihon).
+As alterações do fork são mantidas em commits próprios; atualizações do upstream
+precisam ser revisadas e validadas antes de serem incorporadas.
+
+Os links abaixo pertencem ao **Mihon original**, não ao suporte do Pindorama:
+
+- [Site e documentação](https://mihon.app/)
+- [Site: código-fonte](https://github.com/mihonapp/website/)
+- [Biblioteca bitmap.kt](https://github.com/mihonapp/bitmap.kt/)
+- [Contribuição e traduções upstream](https://mihon.app/docs/contribute)
 
 ### Credits
 
@@ -82,5 +105,3 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 </pre>
-
-</div>

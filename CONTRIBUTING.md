@@ -1,49 +1,62 @@
-Looking to report an issue/bug or make a feature request? Please refer to the [README file](https://github.com/mihonapp/mihon#issues-feature-requests-and-contributing).
+# Contribuindo com o Pindorama!
 
----
+Pindorama! é um fork independente do Mihon, sem afiliação oficial com sua equipe.
+Contribuições, propostas e bugs específicos do Pindorama devem ser enviados às
+Issues e Pull Requests **deste repositório**. Leia também o
+[README](README.md) e o [Código de Conduta](CODE_OF_CONDUCT.md).
 
-Thanks for your interest in contributing to Mihon!
+## Relatos e propostas
 
+Pesquise Issues existentes antes de abrir uma nova. Informe versão/commit do
+Pindorama, versão do Android, dispositivo, passos de reprodução, comportamento
+esperado e observado. Inclua logs quando úteis, removendo dados pessoais.
+Para mudanças maiores, abra uma Issue para discutir o escopo antes da implementação.
 
-# Code contributions
+Extensões e fontes são externas ao projeto. Problemas específicos desses componentes
+devem ser encaminhados aos seus respectivos mantenedores.
 
-Pull requests are welcome!
+## Relação com upstream
 
-If you're interested in taking on [an open issue](https://github.com/mihonapp/mihon/issues), please comment on it so others are aware.
-You do not need to ask for permission nor an assignment.
+[Mihon](https://github.com/mihonapp/mihon) é o projeto original e o remoto `upstream`.
+Não encaminhe falhas observadas apenas no Pindorama à equipe Mihon como se fossem
+falhas do aplicativo original, nem solicite que ela dê suporte ao fork.
+Quando um problema também for reproduzível no Mihon original, um relato upstream
+pode ser preparado seguindo suas regras, com reprodução independente e sem
+atribuir ao Mihon alterações exclusivas do Pindorama.
 
-## Prerequisites
+Mantemos commits pequenos e compreensíveis. Atualizações de `upstream/main` devem
+ser incorporadas em uma branch de trabalho, revisadas e validadas antes de chegar
+a `pindorama/main`, preservando o histórico compartilhado.
 
-Before you start, please note that the ability to use following technologies is **required** and that existing contributors will not actively teach them to you.
+## Desenvolvimento e Pull Requests
 
-- Basic [Android development](https://developer.android.com/)
-- [Kotlin](https://kotlinlang.org/)
+Use conhecimentos básicos de Android e Kotlin, JDK 21, Android SDK e Android Studio
+ou a linha de comando. Um dispositivo ou emulador é útil para validação visual.
+Abra PRs neste repositório, tendo `pindorama/main` como base, com descrição do
+problema, alteração e validação realizada. Relacione a Issue local quando houver.
+Para mudanças visuais, inclua imagens e confira temas claros/escuros e tablets.
 
-### Tools
+Execute os checks pertinentes:
 
-- [Android Studio](https://developer.android.com/studio)
-- Emulator or phone with developer options enabled to test changes.
+```sh
+./gradlew spotlessCheck
+./gradlew testDebugUnitTest
+./gradlew :app:assembleDebug
+```
 
-## Getting help
+Para alterações de banco, execute também `./gradlew verifySqlDelightMigration`.
+Mudanças apenas de documentação/workflows precisam de revisão do diff, links locais
+e validação dos YAMLs; não exigem recompilar o APK.
 
-- Join [the Discord server](https://discord.gg/mihon) for online help and to ask questions while developing.
+## Traduções
 
-# Translations
+Traduções específicas do Pindorama devem ser propostas neste repositório.
+O fluxo de [traduções do Mihon](https://mihon.app/docs/contribute#translation)
+pertence ao upstream; não há integração própria do Pindorama com esse serviço.
 
-Translations are done externally via Weblate. See [our website](https://mihon.app/docs/contribute#translation) for more details.
+## Licença e autoria
 
-
-# Forks
-
-Forks are allowed so long as they abide by [the project's LICENSE](https://github.com/mihonapp/mihon/blob/main/LICENSE).
-
-When creating a fork, remember to:
-
-- To avoid confusion with the main app:
-    - Change the app name
-    - Change the app icon
-    - Change or disable the [app update checker](https://github.com/mihonapp/mihon/blob/main/app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt)
-- To avoid installation conflicts:
-    - Change the `applicationId` in [`build.gradle.kts`](https://github.com/mihonapp/mihon/blob/main/app/build.gradle.kts)
-- To avoid having your data polluting the main app's analytics and crash report services:
-    - If you want to use Firebase analytics, replace [`google-services.json`](https://github.com/mihonapp/mihon/blob/main/app/src/standard/google-services.json) with your own
+Preserve integralmente a [licença Apache 2.0](LICENSE), os avisos de copyright,
+créditos e eventuais arquivos NOTICE. Identifique alterações próprias sem apagar
+a autoria herdada. Forks derivados devem distinguir nome, ícone, applicationId,
+atualização e serviços de telemetria do aplicativo original.
