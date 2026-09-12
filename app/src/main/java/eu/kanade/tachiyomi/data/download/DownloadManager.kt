@@ -342,13 +342,13 @@ class DownloadManager(
         if (capitalizationChanged) {
             val tempName = newName + Downloader.TMP_DIR_SUFFIX
             if (!oldFolder.renameTo(tempName)) {
-                logcat(LogPriority.ERROR) { "Failed to rename source download folder: ${oldFolder.name}" }
+                logcat(LogPriority.ERROR) { "Failed to rename source download folder: sourceId=${oldSource.id}" }
                 return
             }
         }
 
         if (!oldFolder.renameTo(newName)) {
-            logcat(LogPriority.ERROR) { "Failed to rename source download folder: ${oldFolder.name}" }
+            logcat(LogPriority.ERROR) { "Failed to rename source download folder: sourceId=${oldSource.id}" }
         }
     }
 
@@ -372,7 +372,7 @@ class DownloadManager(
         if (capitalizationChanged) {
             val tempName = newName + Downloader.TMP_DIR_SUFFIX
             if (!oldFolder.renameTo(tempName)) {
-                logcat(LogPriority.ERROR) { "Failed to rename manga download folder: ${oldFolder.name}" }
+                logcat(LogPriority.ERROR) { "Failed to rename manga download folder: mangaId=${manga.id}" }
                 return
             }
         }
@@ -380,7 +380,7 @@ class DownloadManager(
         if (oldFolder.renameTo(newName)) {
             cache.renameManga(manga, oldFolder, newTitle)
         } else {
-            logcat(LogPriority.ERROR) { "Failed to rename manga download folder: ${oldFolder.name}" }
+            logcat(LogPriority.ERROR) { "Failed to rename manga download folder: mangaId=${manga.id}" }
         }
     }
 
@@ -415,7 +415,9 @@ class DownloadManager(
             cache.removeChapter(oldChapter, manga)
             cache.addChapter(newName, mangaDir, manga)
         } else {
-            logcat(LogPriority.ERROR) { "Could not rename downloaded chapter: ${oldNames.joinToString()}" }
+            logcat(LogPriority.ERROR) {
+                "Could not rename downloaded chapter: mangaId=${manga.id}, chapterId=${oldChapter.id}"
+            }
         }
     }
 

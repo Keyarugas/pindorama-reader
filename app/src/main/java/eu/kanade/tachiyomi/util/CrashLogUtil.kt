@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.util
 import android.content.Context
 import android.os.Build
 import dev.zacsweers.metro.Inject
-import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.network.NetworkPreferences
@@ -17,13 +16,13 @@ import kotlinx.datetime.offsetAt
 import kotlinx.datetime.toLocalDateTime
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.lang.withUIContext
+import tachiyomi.core.common.util.system.DiagnosticSanitizer
 import kotlin.time.Clock
 
 @Inject
 class CrashLogUtil(
     private val context: Context,
     private val extensionManager: ExtensionManager,
-    private val preferences: BasePreferences,
     private val networkPreferences: NetworkPreferences,
 ) {
 
@@ -31,12 +30,26 @@ class CrashLogUtil(
         try {
             val file = context.createFileInCacheDir("mihon_crash_logs.txt")
 
-            file.appendText(getDebugInfo() + "\n\n")
-            getExtensionsInfo()?.let { file.appendText("$it\n\n") }
-            exception?.let { file.appendText("$it\n\n") }
-
             val logPriority = if (networkPreferences.verboseLogging.get()) "V" else "E"
-            Runtime.getRuntime().exec("logcat *:$logPriority -d -v year -v zone -f ${file.absolutePath}").waitFor()
+            // Never write raw logcat to disk, including output from dependencies bypassing our logger.
+            val process = ProcessBuilder("logcat", "*:$logPriority", "-d", "-v", "year", "-v", "zone")
+                .redirectErrorStream(true)
+                .start()
+            try {
+                file.bufferedWriter().use { output ->
+                    output.write(DiagnosticSanitizer.sanitize(getDebugInfo()) + "\n\n")
+                    getExtensionsInfo()?.let { output.write(DiagnosticSanitizer.sanitize(it) + "\n\n") }
+                    exception?.let {
+                        output.write(DiagnosticSanitizer.sanitize(it.stackTraceToString()) + "\n\n")
+                    }
+                    process.inputStream.bufferedReader().useLines { lines ->
+                        lines.forEach { output.write(DiagnosticSanitizer.sanitize(it) + "\n") }
+                    }
+                }
+                check(process.waitFor() == 0) { "Unable to collect diagnostic logs" }
+            } finally {
+                process.destroy()
+            }
 
             val uri = file.getUriCompat(context)
             context.startActivity(uri.toShareIntent(context, "text/plain"))
@@ -51,7 +64,6 @@ class CrashLogUtil(
         return """
             App ID: ${BuildConfig.APPLICATION_ID}
             App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.COMMIT_SHA}, ${BuildConfig.VERSION_CODE}, ${BuildConfig.BUILD_TIME})
-            Installation ID: ${preferences.installationId.get()}
             Android version: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}; build ${Build.DISPLAY})
             Device brand: ${Build.BRAND}
             Device manufacturer: ${Build.MANUFACTURER}

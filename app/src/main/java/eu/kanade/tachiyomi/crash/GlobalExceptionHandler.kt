@@ -10,6 +10,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
+import tachiyomi.core.common.util.system.DiagnosticSanitizer
 import tachiyomi.core.common.util.system.logcat
 
 class GlobalExceptionHandler private constructor(
@@ -26,13 +27,13 @@ class GlobalExceptionHandler private constructor(
             Throwable(message = decoder.decodeString())
 
         override fun serialize(encoder: Encoder, value: Throwable) =
-            encoder.encodeString(value.stackTraceToString())
+            encoder.encodeString(DiagnosticSanitizer.sanitize(value.stackTraceToString()))
     }
 
     override fun uncaughtException(thread: Thread, exception: Throwable) {
         logcat(priority = LogPriority.ERROR, throwable = exception)
         launchActivity(applicationContext, activityToBeLaunched, exception)
-        defaultHandler.uncaughtException(thread, exception)
+        defaultHandler.uncaughtException(thread, DiagnosticSanitizer.sanitizedThrowable(exception))
     }
 
     private fun launchActivity(
