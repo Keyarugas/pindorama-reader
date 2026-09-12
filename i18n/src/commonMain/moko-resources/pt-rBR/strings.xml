@@ -912,6 +912,15 @@
     <string name="extensionStoresScreen.deleteStore.body">Deseja remover a loja de extensões \"%1$s\" (%2$s)?</string>
     <string name="pref_vertical_navigator">Usar o navegador de capítulos vertical em</string>
     <string name="pref_vertical_navigator_height">Altura do navegador vertical</string>
+    <string name="pindorama_home">Início</string>
+    <string name="pindorama_home_greeting">Mais histórias para um Brasil maior.</string>
+    <string name="pindorama_continue_reading">Continuar lendo</string>
+    <string name="pindorama_resume">Retomar</string>
+    <string name="pindorama_recent_updates">Atualizados recentemente</string>
+    <string name="pindorama_see_all">Ver tudo</string>
+    <string name="pindorama_activity">Atividade</string>
+    <string name="pindorama_chapters_last_week">capítulos lidos nos últimos 7 dias</string>
+    <string name="pindorama_works_last_week">obras lidas nos últimos 7 dias</string>
     <string name="considering">Considerando</string>
     <string name="theme_tokyonight">Noite em Tóquio</string>
     <string name="downloading_with_progress">Fazendo download…(%d%%)</string>
