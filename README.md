@@ -42,13 +42,13 @@ serviços externos possuem suas próprias práticas de privacidade.
 
 ## Distribuição e desenvolvimento
 
-Ainda não há uma URL pública de distribuição definida neste documento.
+O repositório do projeto é [Keyarugas/pindorama-reader](https://github.com/Keyarugas/pindorama-reader).
+Ainda não há uma GitHub Release publicada pelo projeto.
 Os APKs debug gerados pela CI são artefatos de teste, não releases de distribuição.
 A assinatura e a automação de releases próprias ainda precisam ser configuradas.
 
-Placeholder da futura URL: `https://github.com/OWNER/REPOSITORY`.
-Substitua `OWNER` e `REPOSITORY` depois de definir o repositório pessoal; nenhum
-badge de CI ou download aponta para o Mihon como se fosse uma versão do Pindorama.
+Use as [Issues](https://github.com/Keyarugas/pindorama-reader/issues) para relatos
+e as [Pull Requests](https://github.com/Keyarugas/pindorama-reader/pulls) para contribuições.
 
 Para compilar, use JDK 21 e o Android SDK configurado no ambiente:
 

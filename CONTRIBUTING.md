@@ -26,13 +26,13 @@ atribuir ao Mihon alterações exclusivas do Pindorama.
 
 Mantemos commits pequenos e compreensíveis. Atualizações de `upstream/main` devem
 ser incorporadas em uma branch de trabalho, revisadas e validadas antes de chegar
-a `pindorama/main`, preservando o histórico compartilhado.
+à branch pública `main` (localmente `pindorama/main`), preservando o histórico compartilhado.
 
 ## Desenvolvimento e Pull Requests
 
 Use conhecimentos básicos de Android e Kotlin, JDK 21, Android SDK e Android Studio
 ou a linha de comando. Um dispositivo ou emulador é útil para validação visual.
-Abra PRs neste repositório, tendo `pindorama/main` como base, com descrição do
+Abra PRs neste repositório, tendo `main` como base, com descrição do
 problema, alteração e validação realizada. Relacione a Issue local quando houver.
 Para mudanças visuais, inclua imagens e confira temas claros/escuros e tablets.
 
