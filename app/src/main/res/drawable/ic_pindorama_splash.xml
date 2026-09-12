@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="72dp"
+        android:height="72dp"
+        android:gravity="center">
+        <vector
+            android:width="48dp"
+            android:height="48dp"
+            android:viewportWidth="48"
+            android:viewportHeight="48">
+            <path
+                android:fillColor="@color/pindorama_brand_paper"
+                android:pathData="M22,40L8,32L8,12L22,20Z M26,40L40,32L40,12L26,20Z M22,16L12,10L16,4L22,10Z M26,16L36,10L32,4L26,10Z" />
+        </vector>
+    </item>
+</layer-list>
