@@ -59,8 +59,9 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community moderators responsible for enforcement at
-the [Mihon Discord server](https://discord.gg/mihon).
+reported to the Pindorama project maintainers through this repository’s GitHub
+Issues. Until a dedicated contact is defined, use an Issue to request contact
+with a maintainer; do not post private or sensitive incident details publicly.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community moderators are obligated to respect the privacy and security of the
