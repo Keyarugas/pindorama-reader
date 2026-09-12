@@ -13,7 +13,14 @@ class PindoramaHomeViewModelTest {
 
     @Test
     fun `empty history produces empty activity`() {
+        assertEquals(null, PindoramaHomeViewModel.selectContinueReading(emptyList()))
         assertEquals(PindoramaHomeViewModel.ActivitySummary(0, 0), PindoramaHomeViewModel.activity(emptyList(), 1_000_000))
+    }
+
+    @Test
+    fun `continue reading selects the most recent history item`() {
+        val items = listOf(history(2, 2_000), history(1, 1_000))
+        assertEquals(2L, PindoramaHomeViewModel.selectContinueReading(items)?.mangaId)
     }
 
     @Test
