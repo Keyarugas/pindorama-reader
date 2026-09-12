@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.ui.home
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.time.Duration.Companion.days
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 import tachiyomi.domain.history.model.HistoryWithRelations
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.updates.model.UpdatesWithRelations
 import java.util.Date
+import kotlin.time.Duration.Companion.days
 
 class PindoramaHomeViewModelTest {
     private val cover = MangaCover(1, 1, true, null, 0)
@@ -14,7 +14,10 @@ class PindoramaHomeViewModelTest {
     @Test
     fun `empty history produces empty activity`() {
         assertEquals(null, PindoramaHomeViewModel.selectContinueReading(emptyList()))
-        assertEquals(PindoramaHomeViewModel.ActivitySummary(0, 0), PindoramaHomeViewModel.activity(emptyList(), 1_000_000))
+        assertEquals(
+            PindoramaHomeViewModel.ActivitySummary(0, 0),
+            PindoramaHomeViewModel.activity(emptyList(), 1_000_000),
+        )
     }
 
     @Test
@@ -53,5 +56,6 @@ class PindoramaHomeViewModelTest {
         coverData = cover,
     )
 
-    private fun update(mangaId: Long) = UpdatesWithRelations(mangaId, "Manga", 1, "Chapter", null, "", false, false, 0, 1, 0, cover)
+    private fun update(mangaId: Long) =
+        UpdatesWithRelations(mangaId, "Manga", 1, "Chapter", null, "", false, false, 0, 1, 0, cover)
 }

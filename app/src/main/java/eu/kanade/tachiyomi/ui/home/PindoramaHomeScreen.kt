@@ -31,7 +31,10 @@ fun PindoramaHomeScreen(
 ) {
     when (state) {
         PindoramaHomeViewModel.State.Loading -> CircularProgressIndicator(modifier = modifier.padding(24.dp))
-        PindoramaHomeViewModel.State.Error -> Text(stringResource(MR.strings.internal_error), modifier = modifier.padding(24.dp))
+        PindoramaHomeViewModel.State.Error -> Text(
+            stringResource(MR.strings.internal_error),
+            modifier = modifier.padding(24.dp),
+        )
         is PindoramaHomeViewModel.Success -> LazyColumn(
             modifier = modifier,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -40,7 +43,10 @@ fun PindoramaHomeScreen(
             item {
                 Column {
                     Text("Pindorama!", style = MaterialTheme.typography.headlineMedium)
-                    Text(stringResource(MR.strings.pindorama_home_greeting), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(MR.strings.pindorama_home_greeting),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
             }
             state.continueReading?.let { (history, chapter) ->
@@ -49,11 +55,16 @@ fun PindoramaHomeScreen(
                         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             MangaCover.Book(history.coverData, modifier = Modifier.fillMaxWidth(0.25f))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(stringResource(MR.strings.pindorama_continue_reading), style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    stringResource(MR.strings.pindorama_continue_reading),
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
                                 Text(history.title, maxLines = 2)
                                 Text("Capítulo ${history.chapterNumber}")
                                 if (chapter?.lastPageRead ?: 0L > 0L) Text("Página ${chapter!!.lastPageRead + 1}")
-                                Button(onClick = { onResume(history.mangaId, history.chapterId) }) { Text(stringResource(MR.strings.pindorama_resume)) }
+                                Button(onClick = {
+                                    onResume(history.mangaId, history.chapterId)
+                                }) { Text(stringResource(MR.strings.pindorama_resume)) }
                             }
                         }
                     }

@@ -31,7 +31,9 @@ class PindoramaHomeViewModel(
     private val getChapter: GetChapter,
 ) : ViewModel() {
     companion object {
-        internal fun selectContinueReading(items: List<HistoryWithRelations>): HistoryWithRelations? = items.firstOrNull()
+        internal fun selectContinueReading(
+            items: List<HistoryWithRelations>,
+        ): HistoryWithRelations? = items.firstOrNull()
 
         internal fun recentUpdates(
             items: List<UpdatesWithRelations>,
@@ -61,10 +63,10 @@ class PindoramaHomeViewModel(
     val state: StateFlow<State> = combine(history, updates) { historyItems, updateItems ->
         historyItems to updateItems
     }.flatMapLatest { (historyItems, updateItems) ->
-        flow {
+        flow<State> {
             val latest = selectContinueReading(historyItems)
             emit(
-                State.Success(
+                Success(
                     continueReading = latest?.let { it to getChapter.await(it.chapterId) },
                     recentUpdates = recentUpdates(updateItems),
                     activity = activity(historyItems, Clock.System.now().toEpochMilliseconds()),
