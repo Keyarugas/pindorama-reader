@@ -3,9 +3,7 @@ import mihon.gradle.getBuildTime
 import mihon.gradle.getLatestCommitCount
 import mihon.gradle.getLatestCommitSha
 import mihon.gradle.tasks.ReplaceShortcutsPlaceholderTask
-import java.io.FileInputStream
 import java.util.Properties
-import kotlin.io.encoding.Base64
 
 plugins {
     alias(mihonx.plugins.android.application)
@@ -26,6 +24,62 @@ if (Config.includeTelemetry) {
 }
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        try {
+            keystorePropertiesFile.inputStream().use { load(it) }
+        } catch (_: Exception) {
+            throw GradleException("Cannot read local keystore.properties. Check its format and permissions.")
+        }
+    }
+}
+
+fun signingValue(environmentVariable: String, property: String): String? =
+    providers.environmentVariable(environmentVariable).orNull
+        ?: keystoreProperties.getProperty(property)
+
+val releaseStorePath = signingValue("PINDORAMA_KEYSTORE_PATH", "storeFile")
+val releaseStorePassword = signingValue("PINDORAMA_KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("PINDORAMA_KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingValue("PINDORAMA_KEY_PASSWORD", "keyPassword")
+val releaseStoreFile = releaseStorePath?.takeIf { it.isNotBlank() }?.let { rootProject.file(it) }
+val missingSigningFields = mapOf(
+    "PINDORAMA_KEYSTORE_PATH / storeFile" to releaseStorePath,
+    "PINDORAMA_KEYSTORE_PASSWORD / storePassword" to releaseStorePassword,
+    "PINDORAMA_KEY_ALIAS / keyAlias" to releaseKeyAlias,
+    "PINDORAMA_KEY_PASSWORD / keyPassword" to releaseKeyPassword,
+).filterValues { it.isNullOrBlank() }.keys
+
+val validatePindoramaReleaseSigning = tasks.register("validatePindoramaReleaseSigning") {
+    group = "verification"
+    description = "Checks that local Pindorama release signing credentials are configured."
+    doLast {
+        check(missingSigningFields.isEmpty()) {
+            "Pindorama release signing is not configured. Missing: ${missingSigningFields.joinToString()}. " +
+                "See docs/RELEASE_SIGNING.md. Debug signing is never used for release."
+        }
+        check(releaseStoreFile?.isFile == true && releaseStoreFile.canRead()) {
+            "Pindorama release keystore is not a readable file. Check PINDORAMA_KEYSTORE_PATH / storeFile."
+        }
+    }
+}
+
+// Gate packaging and signing, including the build types inheriting release settings.
+tasks.configureEach {
+    if (name in setOf(
+            "preReleaseBuild",
+            "preFossBuild",
+            "preNightlyBuild",
+            "preBenchmarkBuild",
+            "validateSigningRelease",
+            "validateSigningFoss",
+            "validateSigningNightly",
+            "validateSigningBenchmark",
+        )
+    ) {
+        dependsOn(validatePindoramaReleaseSigning)
+    }
+}
 
 android {
     namespace = "eu.kanade.tachiyomi"
@@ -45,30 +99,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    if (System.getenv("MIHON_GITHUB_RELEASE").toBoolean()) {
-        val tempStoreFile = file(System.getenv("RUNNER_TEMP")).resolve("antsy.keystore")
-
-        val storeFileBytes = System.getenv("storeFileBase64").let(Base64::decode)
-        tempStoreFile.outputStream().use { it.write(storeFileBytes) }
-
-        signingConfigs {
-            named("debug") {
-                storeFile = tempStoreFile
-                storePassword = System.getenv("storePassword")
-                keyAlias = System.getenv("keyAlias")
-                keyPassword = System.getenv("keyPassword")
-            }
-        }
-    } else if (keystorePropertiesFile.exists()) {
-        val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
-
-        signingConfigs {
-            named("debug") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
-            }
+    signingConfigs {
+        create("pindoramaRelease") {
+            storeFile = releaseStoreFile
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
 
@@ -82,7 +118,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
-            signingConfig = debug.signingConfig
+            signingConfig = signingConfigs.getByName("pindoramaRelease")
 
             isProfileable = true
 
