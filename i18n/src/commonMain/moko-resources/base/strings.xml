@@ -1087,4 +1087,13 @@
     <string name="donationCampaign.paragraph3">Regardless, Mihon will continue to be maintained by me and the volunteers, and it will stay open source.</string>
     <string name="donationCampaign.contactPlatform">Discord</string>
     <string name="donationCampaign.dismiss">Dismiss</string>
+    <string name="pindorama_home">Home</string>
+    <string name="pindorama_home_greeting">More stories for a bigger Brazil.</string>
+    <string name="pindorama_continue_reading">Continue reading</string>
+    <string name="pindorama_resume">Resume</string>
+    <string name="pindorama_recent_updates">Recently updated</string>
+    <string name="pindorama_see_all">See all</string>
+    <string name="pindorama_activity">Activity</string>
+    <string name="pindorama_chapters_last_week">chapters read in the last 7 days</string>
+    <string name="pindorama_works_last_week">works read in the last 7 days</string>
 </resources>

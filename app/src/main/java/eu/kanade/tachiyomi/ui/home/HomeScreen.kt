@@ -64,8 +64,8 @@ object HomeScreen : Screen() {
     private const val TabNavigatorKey = "HomeTabs"
 
     private val TABS = listOf(
+        PindoramaHomeTab,
         LibraryTab,
-        UpdatesTab,
         HistoryTab,
         BrowseTab,
         MoreTab,
@@ -75,7 +75,7 @@ object HomeScreen : Screen() {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         TabNavigator(
-            tab = LibraryTab,
+            tab = PindoramaHomeTab,
             key = TabNavigatorKey,
         ) { tabNavigator ->
             // Provide usable navigator to content screen
@@ -127,14 +127,14 @@ object HomeScreen : Screen() {
                 }
             }
 
-            val goToLibraryTab = { tabNavigator.current = LibraryTab }
+            val goToHomeTab = { tabNavigator.current = PindoramaHomeTab }
 
-            BackHandler(enabled = tabNavigator.current != LibraryTab, onBack = goToLibraryTab)
+            BackHandler(enabled = tabNavigator.current != PindoramaHomeTab, onBack = goToHomeTab)
 
             LaunchedEffect(Unit) {
                 launch {
                     librarySearchEvent.receiveAsFlow().collectLatest {
-                        goToLibraryTab()
+                        tabNavigator.current = LibraryTab
                         LibraryTab.search(it)
                     }
                 }
