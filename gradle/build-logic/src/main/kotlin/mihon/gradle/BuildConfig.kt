@@ -9,7 +9,8 @@ interface BuildConfig {
 }
 
 val Project.Config: BuildConfig get() = object : BuildConfig {
-    override val includeTelemetry: Boolean = project.hasProperty("include-telemetry")
-    override val enableUpdater: Boolean = project.hasProperty("enable-updater")
+    // Pindorama builds never include Firebase or use the official Mihon updater.
+    override val includeTelemetry: Boolean = false
+    override val enableUpdater: Boolean = false
     override val includeDependencyInfo: Boolean = project.hasProperty("include-dependency-info")
 }
