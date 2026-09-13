@@ -10,9 +10,9 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -56,7 +56,6 @@ import androidx.core.animation.doOnEnd
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.util.Consumer
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.interpolator.view.animation.LinearOutSlowInInterpolator
 import androidx.lifecycle.lifecycleScope
@@ -76,6 +75,7 @@ import eu.kanade.presentation.more.settings.screen.browse.ExtensionStoresScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
+import eu.kanade.tachiyomi.core.security.PrivacySessionState
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
@@ -88,14 +88,14 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.more.NewUpdateScreen
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
+import eu.kanade.tachiyomi.ui.security.PendingPrivacyIntents
+import eu.kanade.tachiyomi.ui.security.PrivacySessionManager
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isBenchmarkBuildType
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
 import eu.kanade.tachiyomi.util.system.updaterEnabled
 import eu.kanade.tachiyomi.util.view.setComposeContent
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
@@ -146,6 +146,7 @@ class MainActivity : BaseActivity() {
     var ready = false
 
     private var navigator: Navigator? = null
+    private val pendingPrivacyIntents: PendingPrivacyIntents by viewModels()
 
     init {
         registerSecureActivity(this)
@@ -159,6 +160,9 @@ class MainActivity : BaseActivity() {
         val splashScreen = if (isLaunch) installSplashScreen() else null
 
         super.onCreate(savedInstanceState)
+
+        if (isLaunch) pendingPrivacyIntents.add(intent)
+        addOnNewIntentListener { pendingPrivacyIntents.add(it) }
 
         Migrator.awaitAndRelease()
 
@@ -200,11 +204,15 @@ class MainActivity : BaseActivity() {
                     this@MainActivity.navigator = navigator
 
                     if (isLaunch) {
-                        // Set start screen
-                        handleIntentAction(intent, navigator)
-
                         // Reset Incognito Mode on relaunch
                         preferences.incognitoMode.set(false)
+                    }
+                    pendingPrivacyIntents.intents.collect { intents ->
+                        intents.forEach {
+                            PrivacySessionManager.session.awaitUnlocked()
+                            handleIntentAction(it, navigator)
+                            pendingPrivacyIntents.removeFirst()
+                        }
                     }
                 }
                 LaunchedEffect(navigator.lastItem) {
@@ -265,8 +273,6 @@ class MainActivity : BaseActivity() {
                         .launchIn(this)
                 }
 
-                HandleOnNewIntent(context = context, navigator = navigator)
-
                 if (!isBenchmarkBuildType) {
                     if (isLaunch) CheckForUpdates()
                     ShowOnboarding()
@@ -291,23 +297,11 @@ class MainActivity : BaseActivity() {
 
     override fun onProvideAssistContent(outContent: AssistContent) {
         super.onProvideAssistContent(outContent)
+        if (PrivacySessionManager.session.state.value != PrivacySessionState.UNLOCKED) return
         when (val screen = navigator?.lastItem) {
             is AssistContentScreen -> {
                 screen.onProvideAssistUrl()?.let { outContent.webUri = it.toUri() }
             }
-        }
-    }
-
-    @Composable
-    private fun HandleOnNewIntent(context: Context, navigator: Navigator) {
-        LaunchedEffect(Unit) {
-            callbackFlow {
-                val componentActivity = context as ComponentActivity
-                val consumer = Consumer<Intent> { trySend(it) }
-                componentActivity.addOnNewIntentListener(consumer)
-                awaitClose { componentActivity.removeOnNewIntentListener(consumer) }
-            }
-                .collectLatest { handleIntentAction(it, navigator) }
         }
     }
 

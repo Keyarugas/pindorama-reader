@@ -265,8 +265,8 @@
     <string name="lock_always">Always</string>
     <string name="lock_never">Never</string>
     <string name="hide_notification_content">Hide notification content</string>
-    <string name="secure_screen">Secure screen</string>
-    <string name="secure_screen_summary">Secure screen hides app contents when switching apps and block screenshots</string>
+    <string name="secure_screen">Protect on-screen content</string>
+    <string name="secure_screen_summary">Blocks screenshots and screen capture on supported devices, and hides recent-app previews. Independent of app lock. Root or a modified OS can bypass this protection.</string>
     <string name="firebase_summary">Sending crash logs and analytics will allow us to identify and fix issues, improve performance, and make future updates more relevant to your needs</string>
 
     <string name="pref_category_nsfw_content">NSFW (18+) sources</string>
@@ -1118,4 +1118,7 @@
     <string name="pindorama_notification_restore_complete">Restore completed</string>
     <string name="pindorama_notification_sync_progress">Library sync in progress</string>
     <string name="pindorama_notification_sync_complete">Library sync completed</string>
+    <string name="pindorama_app_lock_info">Uses Android biometrics or device credentials. Recent-app previews are hidden while app lock is enabled.</string>
+    <string name="pindorama_lock_screen_off">Lock when the screen turns off</string>
+    <string name="pindorama_unlock_info">Authenticate to continue. If authentication is unavailable, check the Android screen lock and try again.</string>
 </resources>
