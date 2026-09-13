@@ -1096,4 +1096,26 @@
     <string name="pindorama_activity">Activity</string>
     <string name="pindorama_chapters_last_week">chapters read in the last 7 days</string>
     <string name="pindorama_works_last_week">works read in the last 7 days</string>
+    <string name="pindorama_notification_privacy">Notification privacy</string>
+    <string name="pindorama_notification_normal">Normal</string>
+    <string name="pindorama_notification_discreet">Discreet</string>
+    <string name="pindorama_notification_private">Private</string>
+    <string name="pindorama_notification_privacy_info">Normal keeps current content and the existing hide-content setting. Discreet hides titles, chapters, sources, files and images, keeping the type of activity. Private also hides counts and most activity details. Actions still work and may open content. Existing notifications are redacted; details return on the next update after choosing Normal. Android channel names remain visible.</string>
+    <string name="pindorama_notification_attention">Pindorama needs your attention</string>
+    <string name="pindorama_notification_complete">Process completed</string>
+    <string name="pindorama_notification_processing">Process in progress</string>
+    <string name="pindorama_notification_activity">Activity available</string>
+    <string name="pindorama_notification_updates">New updates are available</string>
+    <string name="pindorama_notification_library">Checking for updates</string>
+    <string name="pindorama_notification_downloading">Download in progress</string>
+    <string name="pindorama_notification_paused">Download paused</string>
+    <string name="pindorama_notification_backup_progress">Backup in progress</string>
+    <string name="pindorama_notification_backup_complete">Backup completed</string>
+    <string name="pindorama_notification_extensions">Extension activity available</string>
+    <string name="pindorama_notification_image_saved">Image saved</string>
+    <string name="pindorama_notification_open">Open</string>
+    <string name="pindorama_notification_restore_progress">Restore in progress</string>
+    <string name="pindorama_notification_restore_complete">Restore completed</string>
+    <string name="pindorama_notification_sync_progress">Library sync in progress</string>
+    <string name="pindorama_notification_sync_complete">Library sync completed</string>
 </resources>

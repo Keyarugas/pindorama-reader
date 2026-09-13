@@ -13,6 +13,7 @@ import androidx.core.app.NotificationManagerCompat.NotificationWithIdAndTag
 import androidx.core.content.PermissionChecker
 import androidx.core.content.getSystemService
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.notification.applyNotificationPrivacy
 
 val Context.notificationManager: NotificationManager
     get() = getSystemService()!!
@@ -33,10 +34,12 @@ fun Context.notify(id: Int, notification: Notification) {
         return
     }
 
-    NotificationManagerCompat.from(this).notify(id, notification)
+    NotificationManagerCompat.from(this).notify(id, applyNotificationPrivacy(notification))
 }
 
-fun Context.notify(notificationWithIdAndTags: List<NotificationWithIdAndTag>) {
+data class PendingNotification(val id: Int, val notification: Notification, val tag: String? = null)
+
+fun Context.notify(notificationWithIdAndTags: List<PendingNotification>) {
     if (
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
         PermissionChecker.checkSelfPermission(
@@ -47,7 +50,11 @@ fun Context.notify(notificationWithIdAndTags: List<NotificationWithIdAndTag>) {
         return
     }
 
-    NotificationManagerCompat.from(this).notify(notificationWithIdAndTags)
+    NotificationManagerCompat.from(this).notify(
+        notificationWithIdAndTags.map {
+            NotificationWithIdAndTag(it.tag, it.id, applyNotificationPrivacy(it.notification))
+        },
+    )
 }
 
 fun Context.cancelNotification(id: Int) {
@@ -65,7 +72,10 @@ fun Context.notificationBuilder(
     channelId: String,
     block: (NotificationCompat.Builder.() -> Unit)? = null,
 ): NotificationCompat.Builder {
-    val builder = NotificationCompat.Builder(this, channelId)
+    val context = this
+    val builder = object : NotificationCompat.Builder(context, channelId) {
+        override fun build(): Notification = context.applyNotificationPrivacy(super.build())
+    }
         .setColor(getColor(R.color.accent_blue))
     if (block != null) {
         builder.block()

@@ -24,6 +24,11 @@ class SecurityPreferences(
         SecureScreenMode.INCOGNITO,
     )
 
+    val notificationPrivacyLevel: Preference<NotificationPrivacyLevel> = preferenceStore.getEnum(
+        "notification_privacy_level",
+        NotificationPrivacyLevel.NORMAL,
+    )
+
     val hideNotificationContent: Preference<Boolean> = preferenceStore.getBoolean("hide_notification_content", false)
 
     /**
