@@ -21,6 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,10 +83,19 @@ fun PindoramaHomeScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         EditorialTitle(stringResource(MR.strings.pindorama_continue_reading))
                         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                            MangaCover.Book(history.coverData, modifier = Modifier.fillMaxWidth(0.38f))
+                            MangaCover.Book(
+                                history.coverData,
+                                modifier = Modifier.fillMaxWidth(0.38f),
+                                contentDescription = history.title,
+                                onClick = { onOpenManga(history.mangaId) },
+                            )
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
                                     history.title,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(role = Role.Button) { onOpenManga(history.mangaId) }
+                                        .minimumInteractiveComponentSize(),
                                     style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
                                 )
                                 Text(
