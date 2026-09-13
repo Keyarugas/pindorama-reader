@@ -926,4 +926,26 @@
     <string name="downloading_with_progress">Fazendo download…(%d%%)</string>
     <string name="pref_filter_update_categories_details">Atualizações nas categorias excluídas não serão exibidas mesmo que eles também estejam nas categorias incluídas.</string>
     <string name="pref_filter_upcoming_categories_details">Títulos nas categorias excluídas não serão exibidas, mesmo que eles também estejam nas categorias incluídas.</string>
+    <string name="pindorama_notification_privacy">Privacidade das notificações</string>
+    <string name="pindorama_notification_normal">Normal</string>
+    <string name="pindorama_notification_discreet">Discreto</string>
+    <string name="pindorama_notification_private">Privado</string>
+    <string name="pindorama_notification_privacy_info">Normal mantém o conteúdo atual e a opção anterior de ocultação. Discreto oculta títulos, capítulos, fontes, arquivos e imagens, mantendo o tipo de atividade. Privado também oculta contagens e a maioria dos detalhes da atividade. As ações continuam funcionando e podem abrir conteúdo. Notificações existentes são protegidas; os detalhes voltam na próxima atualização após escolher Normal. Os nomes dos canais do Android continuam visíveis.</string>
+    <string name="pindorama_notification_attention">O Pindorama precisa da sua atenção</string>
+    <string name="pindorama_notification_complete">Processo concluído</string>
+    <string name="pindorama_notification_processing">Processo em andamento</string>
+    <string name="pindorama_notification_activity">Atividade disponível</string>
+    <string name="pindorama_notification_updates">Há novas atualizações</string>
+    <string name="pindorama_notification_library">Verificando atualizações</string>
+    <string name="pindorama_notification_downloading">Download em andamento</string>
+    <string name="pindorama_notification_paused">Download pausado</string>
+    <string name="pindorama_notification_backup_progress">Backup em andamento</string>
+    <string name="pindorama_notification_backup_complete">Backup concluído</string>
+    <string name="pindorama_notification_extensions">Há atividade de extensões</string>
+    <string name="pindorama_notification_image_saved">Imagem salva</string>
+    <string name="pindorama_notification_open">Abrir</string>
+    <string name="pindorama_notification_restore_progress">Restauração em andamento</string>
+    <string name="pindorama_notification_restore_complete">Restauração concluída</string>
+    <string name="pindorama_notification_sync_progress">Sincronização da biblioteca em andamento</string>
+    <string name="pindorama_notification_sync_complete">Sincronização da biblioteca concluída</string>
 </resources>

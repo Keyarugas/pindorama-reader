@@ -7,8 +7,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.tachiyomi.core.security.NotificationPrivacyLevel
 import eu.kanade.tachiyomi.core.security.PrivacyPreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
+import eu.kanade.tachiyomi.data.notification.refreshNotificationPrivacy
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.authenticate
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.isAuthenticationSupported
 import eu.kanade.tachiyomi.util.system.telemetryIncluded
@@ -78,6 +80,23 @@ object SettingsSecurityScreen : SearchableSettings {
                     },
                 ),
 
+                Preference.PreferenceItem.ListPreference(
+                    preference = securityPreferences.notificationPrivacyLevel,
+                    title = stringResource(MR.strings.pindorama_notification_privacy),
+                    entries = mapOf(
+                        NotificationPrivacyLevel.NORMAL to stringResource(MR.strings.pindorama_notification_normal),
+                        NotificationPrivacyLevel.DISCREET to stringResource(MR.strings.pindorama_notification_discreet),
+                        NotificationPrivacyLevel.PRIVATE to stringResource(MR.strings.pindorama_notification_private),
+                    ),
+                    onValueChanged = {
+                        securityPreferences.notificationPrivacyLevel.set(it)
+                        context.refreshNotificationPrivacy(it)
+                        true
+                    },
+                ),
+                Preference.PreferenceItem.InfoPreference(
+                    stringResource(MR.strings.pindorama_notification_privacy_info),
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = securityPreferences.hideNotificationContent,
                     title = stringResource(MR.strings.hide_notification_content),

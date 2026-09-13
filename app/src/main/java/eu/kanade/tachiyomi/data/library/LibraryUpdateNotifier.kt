@@ -8,7 +8,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import coil3.asDrawable
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -25,6 +24,7 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.util.lang.chop
+import eu.kanade.tachiyomi.util.system.PendingNotification
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.getBitmapOrNull
 import eu.kanade.tachiyomi.util.system.notificationBuilder
@@ -211,7 +211,7 @@ class LibraryUpdateNotifier(
             launchUI {
                 context.notify(
                     updates.map { (manga, chapters) ->
-                        NotificationManagerCompat.NotificationWithIdAndTag(
+                        PendingNotification(
                             manga.id.hashCode(),
                             createNewChaptersNotification(manga, chapters),
                         )
