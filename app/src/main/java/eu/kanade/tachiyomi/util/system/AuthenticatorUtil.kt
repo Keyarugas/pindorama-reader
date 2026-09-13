@@ -6,6 +6,7 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricPrompt.AuthenticationError
+import androidx.biometric.auth.AuthPrompt
 import androidx.biometric.auth.AuthPromptCallback
 import androidx.biometric.auth.startClass2BiometricOrCredentialAuthentication
 import androidx.core.content.ContextCompat
@@ -36,9 +37,9 @@ object AuthenticatorUtil {
         subtitle: String? = null,
         confirmationRequired: Boolean = true,
         callback: AuthenticationCallback,
-    ) {
+    ): AuthPrompt {
         isAuthenticating = true
-        startClass2BiometricOrCredentialAuthentication(
+        return startClass2BiometricOrCredentialAuthentication(
             title = title,
             subtitle = subtitle,
             confirmationRequired = confirmationRequired,

@@ -19,6 +19,8 @@ class SecurityPreferences(
 
     val lockAppAfter: Preference<Int> = preferenceStore.getInt("lock_app_after", 0)
 
+    val lockOnScreenOff: Preference<Boolean> = preferenceStore.getBoolean("lock_on_screen_off", false)
+
     val secureScreen: Preference<SecureScreenMode> = preferenceStore.getEnum(
         "secure_screen_v2",
         SecureScreenMode.INCOGNITO,

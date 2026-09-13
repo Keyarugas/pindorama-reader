@@ -54,6 +54,7 @@ object SettingsSecurityScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = useAuthPref,
                     title = stringResource(MR.strings.lock_with_biometrics),
+                    subtitle = stringResource(MR.strings.pindorama_app_lock_info),
                     enabled = authSupported,
                     onValueChanged = {
                         (context as FragmentActivity).authenticate(
@@ -80,6 +81,11 @@ object SettingsSecurityScreen : SearchableSettings {
                     },
                 ),
 
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = securityPreferences.lockOnScreenOff,
+                    title = stringResource(MR.strings.pindorama_lock_screen_off),
+                    enabled = useAuth,
+                ),
                 Preference.PreferenceItem.ListPreference(
                     preference = securityPreferences.notificationPrivacyLevel,
                     title = stringResource(MR.strings.pindorama_notification_privacy),
