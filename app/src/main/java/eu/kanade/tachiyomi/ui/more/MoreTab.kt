@@ -27,6 +27,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.stats.StatsScreen
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +84,7 @@ data object MoreTab : Tab {
 @ViewModelKey
 @ContributesIntoMap(AppScope::class)
 class MoreViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     private val downloadManager: DownloadManager,
     preferences: BasePreferences,
 ) : ViewModel() {
@@ -98,7 +100,7 @@ class MoreViewModel(
         viewModelScope.launchIO {
             combine(
                 downloadManager.isDownloaderRunning,
-                downloadManager.queueState,
+                privateVisibility.filter(downloadManager.queueState) { it.manga.id },
             ) { isRunning, downloadQueue -> Pair(isRunning, downloadQueue.size) }
                 .collectLatest { (isDownloading, downloadQueueSize) ->
                     val pendingDownloadExists = downloadQueueSize != 0

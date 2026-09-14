@@ -11,6 +11,8 @@ import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.notification.NotificationHandler
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.data.notification.setMangaPrivacy
+import eu.kanade.tachiyomi.data.notification.setMangaPrivacyIds
 import eu.kanade.tachiyomi.util.lang.chop
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notificationBuilder
@@ -73,6 +75,7 @@ class DownloadNotifier(
      */
     fun onProgressChange(download: Download) {
         with(progressNotificationBuilder) {
+            setMangaPrivacy(listOf(download.manga))
             if (!isDownloading) {
                 setSmallIcon(android.R.drawable.stat_sys_download)
                 clearActions()
@@ -172,6 +175,8 @@ class DownloadNotifier(
      */
     fun onWarning(reason: String, timeout: Long? = null, contentIntent: PendingIntent? = null, mangaId: Long? = null) {
         with(errorNotificationBuilder) {
+            setMangaPrivacyIds(mangaId?.let(::listOf))
+            setStyle(null)
             setContentTitle(context.stringResource(MR.strings.download_notifier_downloader_title))
             setStyle(NotificationCompat.BigTextStyle().bigText(reason))
             setSmallIcon(R.drawable.ic_warning_white_24dp)
@@ -207,6 +212,8 @@ class DownloadNotifier(
     fun onError(error: String? = null, chapter: String? = null, mangaTitle: String? = null, mangaId: Long? = null) {
         // Create notification
         with(errorNotificationBuilder) {
+            setMangaPrivacyIds(mangaId?.let(::listOf))
+            setStyle(null)
             setContentTitle(
                 mangaTitle?.plus(": $chapter") ?: context.stringResource(MR.strings.download_notifier_downloader_title),
             )

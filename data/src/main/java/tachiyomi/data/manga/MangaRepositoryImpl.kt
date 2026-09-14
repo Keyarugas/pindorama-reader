@@ -34,6 +34,9 @@ class MangaRepositoryImpl(
     private val database: Database,
 ) : MangaRepository {
 
+    override fun getPrivateMangaIds(): Flow<List<Long>> =
+        database.mangasQueries.getPrivateMangaIds().subscribeToList()
+
     override suspend fun getMangaById(id: Long): Manga {
         return database.mangasQueries
             .getMangaById(id, MangaMapper::mapManga)
@@ -216,6 +219,7 @@ class MangaRepositoryImpl(
                     version = value.version,
                     isSyncing = 0,
                     notes = value.notes,
+                    isPrivate = value.isPrivate,
                     memo = value.memo?.let(MemoColumnAdapter::encode),
                 )
             }

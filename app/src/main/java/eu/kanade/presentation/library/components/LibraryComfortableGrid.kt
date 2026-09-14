@@ -44,6 +44,7 @@ internal fun LibraryComfortableGrid(
                     lastModified = manga.coverLastModified,
                 ),
                 coverBadgeStart = {
+                    PrivateBadge(isPrivate = libraryItem.libraryManga.manga.isPrivate)
                     DownloadsBadge(count = libraryItem.badges.downloadCount)
                     UnreadBadge(count = libraryItem.badges.unreadCount)
                 },

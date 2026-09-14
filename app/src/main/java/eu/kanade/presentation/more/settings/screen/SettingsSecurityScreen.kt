@@ -114,6 +114,7 @@ object SettingsSecurityScreen : SearchableSettings {
                     title = stringResource(MR.strings.secure_screen),
                 ),
                 Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.secure_screen_summary)),
+                Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pindorama_private_library_info)),
             ),
         )
     }

@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.data.notification
 
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.tachiyomi.core.security.NotificationPrivacyLevel
+import eu.kanade.tachiyomi.core.security.PrivateContentSession
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.notification.NotificationPrivacyPolicy.Content
 import eu.kanade.tachiyomi.data.notification.NotificationPrivacyPolicy.Event
@@ -21,6 +23,41 @@ class NotificationPrivacyPolicyTest {
         expandedLines = listOf("Obra reservada", "Capítulo 42"),
         number = 42,
     )
+
+    @Test
+    fun `unlocked private session never relaxes private notifications`() {
+        val session = PrivateContentSession()
+        session.authenticationSucceeded(session.beginAuthentication()!!)
+        assertEquals(PrivateContentSessionState.UNLOCKED, session.state.value)
+        val effective = NotificationPrivacyPolicy.effectiveLevel(NotificationPrivacyLevel.NORMAL, true)
+        assertEquals(NotificationPrivacyLevel.PRIVATE, effective)
+        assertSafe(transform(effective, Event.UPDATES))
+    }
+
+    @Test
+    fun `private content requires private level regardless of global choice`() {
+        NotificationPrivacyLevel.entries.forEach { global ->
+            val effective = NotificationPrivacyPolicy.effectiveLevel(global, true)
+            assertEquals(NotificationPrivacyLevel.PRIVATE, effective)
+            Event.entries.forEach { event ->
+                val protected = transform(effective, event)
+                assertFalse(protected.toString().contains("Obra reservada"))
+                assertFalse(protected.toString().contains("Capítulo"))
+                assertFalse(protected.toString().contains("Fonte secreta"))
+                assertFalse(protected.toString().contains("backup-pessoal"))
+            }
+            assertEquals(global, NotificationPrivacyPolicy.effectiveLevel(global, false))
+        }
+    }
+
+    @Test
+    fun `unknown attribution and unloaded classification fail closed`() {
+        assertTrue(NotificationPrivacyPolicy.requiresPrivateContent(setOf(1L), null))
+        assertTrue(NotificationPrivacyPolicy.requiresPrivateContent(null, setOf(2L)))
+        assertTrue(NotificationPrivacyPolicy.requiresPrivateContent(setOf(1L, 2L), setOf(2L)))
+        assertFalse(NotificationPrivacyPolicy.requiresPrivateContent(setOf(1L), setOf(2L)))
+        assertFalse(NotificationPrivacyPolicy.requiresPrivateContent(null, emptySet()))
+    }
 
     @Test
     fun `normal preserves the exact existing content`() {

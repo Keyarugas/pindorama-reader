@@ -13,6 +13,9 @@ import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.presentation.history.HistoryUiModel
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import eu.kanade.tachiyomi.util.lang.toLocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -20,13 +23,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -51,12 +55,12 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.source.service.SourceManager
-import kotlin.time.Duration.Companion.seconds
 
 @Inject
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class HistoryViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     private val addTracks: AddTracks,
     private val getCategories: GetCategories,
     private val getDuplicateLibraryManga: GetDuplicateLibraryManga,
@@ -79,9 +83,18 @@ class HistoryViewModel(
 
     private val dialog = MutableStateFlow<Dialog?>(null)
 
+    init {
+        PrivateContentSessionManager.session.state.onEach {
+            if (it != PrivateContentSessionState.UNLOCKED) {
+                dialog.value = null
+                searchQuery.value = null
+            }
+        }.launchIn(viewModelScope)
+    }
+
     private val history = searchQuery
         .flatMapLatest { query ->
-            getHistory.subscribe(query ?: "")
+            privateVisibility.filter(getHistory.subscribe(query ?: "")) { it.mangaId }
                 .distinctUntilChanged()
                 .catch { error ->
                     logcat(LogPriority.ERROR, error)
@@ -90,7 +103,7 @@ class HistoryViewModel(
                 .map { it.toHistoryUiModels() }
                 .flowOn(Dispatchers.IO)
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<State> = combine(
         searchQuery,
@@ -99,7 +112,7 @@ class HistoryViewModel(
     ) { searchQuery, history, dialog ->
         State(searchQuery = searchQuery, list = history, dialog = dialog)
     }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), State())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, State())
 
     private fun List<HistoryWithRelations>.toHistoryUiModels(): List<HistoryUiModel> {
         return map { HistoryUiModel.Item(it) }

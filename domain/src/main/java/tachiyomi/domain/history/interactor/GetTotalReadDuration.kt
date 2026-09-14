@@ -8,7 +8,7 @@ class GetTotalReadDuration(
     private val repository: HistoryRepository,
 ) {
 
-    suspend fun await(): Long {
-        return repository.getTotalReadDuration()
+    suspend fun await(includePrivate: Boolean = true): Long {
+        return repository.getTotalReadDuration(includePrivate)
     }
 }

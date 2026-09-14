@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.ui.library
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
@@ -34,6 +36,7 @@ import eu.kanade.presentation.manga.components.LibraryBottomActionMenu
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
@@ -41,6 +44,7 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
@@ -84,6 +88,9 @@ data object LibraryTab : Tab {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
+        val privateSession by PrivateContentSessionManager.session.state.collectAsStateWithLifecycle()
+        val privateAuthentication =
+            rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
         val scope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current
 
@@ -133,6 +140,16 @@ data object LibraryTab : Tab {
                                     context.stringResource(MR.strings.information_no_entries_found),
                                 )
                             }
+                        }
+                    },
+                    privateContentUnlocked = privateSession == PrivateContentSessionState.UNLOCKED,
+                    onTogglePrivateContent = {
+                        if (privateSession == PrivateContentSessionState.UNLOCKED) {
+                            PrivateContentSessionManager.session.lock()
+                        } else {
+                            PrivateContentSessionManager.authenticationIntent(
+                                context,
+                            )?.let(privateAuthentication::launch)
                         }
                     },
                     searchQuery = state.searchQuery,

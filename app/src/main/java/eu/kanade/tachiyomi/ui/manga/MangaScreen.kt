@@ -36,6 +36,7 @@ import eu.kanade.presentation.manga.components.SetIntervalDialog
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.isLocalOrStub
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -46,6 +47,8 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.notes.MangaNotesScreen
 import eu.kanade.tachiyomi.ui.manga.track.TrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.security.PrivateContentGate
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
@@ -59,6 +62,7 @@ import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.service.MangaVisibilityPolicy
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 class MangaScreen(
@@ -67,8 +71,11 @@ class MangaScreen(
 ) : Screen(), AssistContentScreen {
 
     private var assistUrl: String? = null
+    private var assistMangaIsPrivate = true
 
-    override fun onProvideAssistUrl() = assistUrl
+    override fun onProvideAssistUrl() = assistUrl.takeIf {
+        MangaVisibilityPolicy.isVisible(assistMangaIsPrivate, PrivateContentSessionManager.session.state.value)
+    }
 
     @Composable
     override fun Content() {
@@ -82,6 +89,7 @@ class MangaScreen(
             }
 
         val state by viewModel.state.collectAsStateWithLifecycle()
+        var changingPrivacy by remember { mutableStateOf(false) }
 
         if (state is MangaViewModel.State.Loading) {
             LoadingScreen()
@@ -89,6 +97,13 @@ class MangaScreen(
         }
 
         val successState = state as MangaViewModel.State.Success
+        assistMangaIsPrivate = successState.manga.isPrivate
+        val session by PrivateContentSessionManager.session.state.collectAsStateWithLifecycle()
+        if (!MangaVisibilityPolicy.isVisible(successState.manga.isPrivate, session)) {
+            assistUrl = null
+            PrivateContentGate(destinationKey = mangaId, autoRequest = !changingPrivacy, onBack = { navigator.pop() })
+            return
+        }
         val isHttpSource = remember { successState.source is HttpSource }
 
         LaunchedEffect(successState.manga, viewModel.source) {
@@ -153,6 +168,13 @@ class MangaScreen(
             onMigrateClicked = {
                 navigator.push(MigrationConfigScreen(successState.manga.id))
             }.takeIf { successState.manga.favorite },
+            onTogglePrivacy = {
+                changingPrivacy = true
+                scope.launch {
+                    if (viewModel.togglePrivacy()) navigator.pop()
+                    changingPrivacy = false
+                }
+            },
             onEditNotesClicked = { navigator.push(MangaNotesScreen(manga = successState.manga)) },
             onMultiBookmarkClicked = viewModel::bookmarkChapters,
             onMultiMarkAsReadClicked = viewModel::markChaptersRead,

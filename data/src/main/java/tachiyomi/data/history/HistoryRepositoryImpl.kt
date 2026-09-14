@@ -36,9 +36,9 @@ class HistoryRepositoryImpl(
             .awaitAsOneOrNull()
     }
 
-    override suspend fun getTotalReadDuration(): Long {
+    override suspend fun getTotalReadDuration(includePrivate: Boolean): Long {
         return database.historyQueries
-            .getReadDuration()
+            .getReadDuration(includePrivate)
             .awaitAsOne()
     }
 

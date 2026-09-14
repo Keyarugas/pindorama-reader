@@ -86,6 +86,7 @@ interface AppGraph : ViewModelGraph {
     val backupPreferences: BackupPreferences
     val storagePreferences: StoragePreferences
     val privacyPreferences: PrivacyPreferences
+    val privateContentVisibility: eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
     val securityPreferences: SecurityPreferences
     val downloadPreferences: DownloadPreferences
 

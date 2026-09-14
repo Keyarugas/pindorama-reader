@@ -18,10 +18,13 @@ import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.updates.UpdatesUiModel
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import eu.kanade.tachiyomi.util.lang.toLocalDate
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.Dispatchers
@@ -30,14 +33,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -61,12 +65,12 @@ import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.model.UpdatesWithRelations
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.seconds
 
 @Inject
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class UpdatesViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     private val context: Context,
     private val sourceManager: SourceManager,
     private val downloadManager: DownloadManager,
@@ -92,6 +96,15 @@ class UpdatesViewModel(
     private val selectedChapterIds = MutableStateFlow(emptySet<Long>())
 
     private val dialog = MutableStateFlow<Dialog?>(null)
+
+    init {
+        PrivateContentSessionManager.session.state.onEach {
+            if (it != PrivateContentSessionState.UNLOCKED) {
+                dialog.value = null
+                selectedChapterIds.value = emptySet()
+            }
+        }.launchIn(viewModelScope)
+    }
 
     private val downloadStates = MutableStateFlow(emptyMap<Long, DownloadProgress>())
 
@@ -139,15 +152,17 @@ class UpdatesViewModel(
         getUpdatesItemPreferenceFlow()
             .distinctUntilChanged()
             .flatMapLatest {
-                getUpdates.subscribe(
-                    Clock.System.now().minus(3, DateTimeUnit.MONTH, TimeZone.currentSystemDefault()),
-                    unread = it.filterUnread.toBooleanOrNull(),
-                    started = it.filterStarted.toBooleanOrNull(),
-                    bookmarked = it.filterBookmarked.toBooleanOrNull(),
-                    hideExcludedScanlators = it.filterExcludedScanlators,
-                    includedCategories = it.filterIncludedCategories,
-                    excludedCategories = it.filterExcludedCategories,
-                ).distinctUntilChanged()
+                privateVisibility.filter(
+                    getUpdates.subscribe(
+                        Clock.System.now().minus(3, DateTimeUnit.MONTH, TimeZone.currentSystemDefault()),
+                        unread = it.filterUnread.toBooleanOrNull(),
+                        started = it.filterStarted.toBooleanOrNull(),
+                        bookmarked = it.filterBookmarked.toBooleanOrNull(),
+                        hideExcludedScanlators = it.filterExcludedScanlators,
+                        includedCategories = it.filterIncludedCategories,
+                        excludedCategories = it.filterExcludedCategories,
+                    ),
+                ) { it.mangaId }.distinctUntilChanged()
             },
         downloadCache.changes,
         downloadManager.queueState,
@@ -161,7 +176,7 @@ class UpdatesViewModel(
             .applyFilters(itemPreferences)
     }
         .flowOn(Dispatchers.IO)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val state: StateFlow<State> = combine(
         updateItems,
@@ -192,7 +207,7 @@ class UpdatesViewModel(
             dialog = dialog,
         )
     }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), State())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, State())
 
     private fun List<UpdatesItem>.applyFilters(
         preferences: ItemPreferences,

@@ -31,6 +31,12 @@ object NotificationPrivacyPolicy {
         val number: Int = 0,
     )
 
+    fun requiresPrivateContent(mangaIds: Set<Long>?, privateIds: Set<Long>?): Boolean =
+        privateIds == null || if (mangaIds == null) privateIds.isNotEmpty() else mangaIds.any { it in privateIds }
+
+    fun effectiveLevel(global: NotificationPrivacyLevel, containsPrivateContent: Boolean): NotificationPrivacyLevel =
+        if (containsPrivateContent) NotificationPrivacyLevel.PRIVATE else global
+
     fun transform(
         level: NotificationPrivacyLevel,
         event: Event,

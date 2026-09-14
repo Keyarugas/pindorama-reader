@@ -37,6 +37,8 @@ fun MangaToolbar(
     onClickRefresh: () -> Unit,
     onClickMigrate: (() -> Unit)?,
     onClickEditNotes: () -> Unit,
+    isPrivate: Boolean,
+    onTogglePrivacy: () -> Unit,
 
     // For action mode
     actionModeCounter: Int,
@@ -124,6 +126,18 @@ fun MangaToolbar(
                             ),
                         )
                     }
+                    add(
+                        AppBar.OverflowAction(
+                            title = stringResource(
+                                if (isPrivate) {
+                                    MR.strings.pindorama_remove_privacy
+                                } else {
+                                    MR.strings.pindorama_make_private
+                                },
+                            ),
+                            onClick = onTogglePrivacy,
+                        ),
+                    )
                     if (onClickMigrate != null) {
                         add(
                             AppBar.OverflowAction(

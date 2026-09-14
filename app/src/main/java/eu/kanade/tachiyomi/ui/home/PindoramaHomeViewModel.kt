@@ -7,6 +7,8 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.stateIn
 import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.model.HistoryWithRelations
+import tachiyomi.domain.manga.service.MangaVisibilityPolicy
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.model.UpdatesWithRelations
 import kotlin.time.Clock
@@ -26,6 +29,7 @@ import kotlin.time.Duration.Companion.days
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class PindoramaHomeViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     getHistory: GetHistory,
     getUpdates: GetUpdates,
     private val getChapter: GetChapter,
@@ -60,10 +64,21 @@ class PindoramaHomeViewModel(
         excludedCategories = emptyList(),
     )
 
-    val state: StateFlow<State> = combine(history, updates) { historyItems, updateItems ->
-        historyItems to updateItems
+    val state: StateFlow<State> = combine(
+        history,
+        updates,
+        privateVisibility.privateIds,
+        PrivateContentSessionManager.session.state,
+    ) { historyItems, updateItems, ids, session ->
+        if (ids == null) {
+            emptyList<HistoryWithRelations>() to emptyList<UpdatesWithRelations>()
+        } else {
+            MangaVisibilityPolicy.filter(historyItems, ids, session) { it.mangaId } to
+                MangaVisibilityPolicy.filter(updateItems, ids, session) { it.mangaId }
+        }
     }.flatMapLatest { (historyItems, updateItems) ->
         flow<State> {
+            emit(State.Loading)
             val latest = selectContinueReading(historyItems)
             emit(
                 Success(
@@ -75,7 +90,7 @@ class PindoramaHomeViewModel(
         }
     }
         .catch { emit(State.Error) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State.Loading)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, State.Loading)
 
     data class ActivitySummary(val chaptersRead: Int, val worksRead: Int)
     data class Success(
