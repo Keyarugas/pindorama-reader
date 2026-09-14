@@ -948,7 +948,14 @@
     <string name="pindorama_notification_restore_complete">Restauração concluída</string>
     <string name="pindorama_notification_sync_progress">Sincronização da biblioteca em andamento</string>
     <string name="pindorama_notification_sync_complete">Sincronização da biblioteca concluída</string>
-    <string name="pindorama_app_lock_info">Usa biometria ou credencial do Android. As prévias nos apps recentes ficam ocultas enquanto o bloqueio do aplicativo está ativado.</string>
+    <string name="pindorama_app_lock_info">Protege o aplicativo inteiro usando biometria ou credencial do Android. Desbloquear o app não desbloqueia o conteúdo privado. As prévias nos apps recentes ficam ocultas enquanto o bloqueio do aplicativo está ativado.</string>
     <string name="pindorama_lock_screen_off">Bloquear ao apagar a tela</string>
     <string name="pindorama_unlock_info">Autentique-se para continuar. Se a autenticação estiver indisponível, verifique o bloqueio de tela do Android e tente novamente.</string>
+    <string name="pindorama_make_private">Tornar privada</string>
+    <string name="pindorama_remove_privacy">Remover privacidade</string>
+    <string name="pindorama_private_manga">Obra privada</string>
+    <string name="pindorama_private_library_info">Obras privadas permanecem ocultas até você desbloquear o conteúdo privado pelo menu da Biblioteca. Isso é independente do bloqueio do aplicativo. O conteúdo privado volta a bloquear ao sair do app ou apagar a tela.</string>
+    <string name="pindorama_show_private_content">Mostrar conteúdo privado</string>
+    <string name="pindorama_hide_private_content">Ocultar conteúdo privado</string>
+    <string name="pindorama_private_content_locked">O conteúdo privado está oculto. Autentique-se para continuar.</string>
 </resources>

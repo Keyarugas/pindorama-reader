@@ -10,6 +10,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import eu.kanade.tachiyomi.core.security.PrivacySession
 import eu.kanade.tachiyomi.core.security.PrivacySessionState
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,7 +33,13 @@ object PrivacySessionManager {
     fun onBackground(context: Context) {
         // Device-credential authentication may open a system activity. Its background transition
         // is not an app departure; Android's prompt reports cancellation/error separately.
-        if (AuthenticatorUtil.isAuthenticating && session.state.value == PrivacySessionState.AUTHENTICATING) return
+        if (AuthenticatorUtil.isAuthenticating && (
+                session.state.value == PrivacySessionState.AUTHENTICATING ||
+                    PrivateContentSessionManager.session.state.value == PrivateContentSessionState.AUTHENTICATING
+                )
+        ) {
+            return
+        }
         session.onBackground()
         val minutes = context.appGraph.securityPreferences.lockAppAfter.get()
         timeoutJob?.cancel()

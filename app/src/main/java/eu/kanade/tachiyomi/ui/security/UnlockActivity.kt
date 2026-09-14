@@ -12,7 +12,6 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
-import eu.kanade.tachiyomi.core.security.PrivacySessionState
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.isAuthenticationSupported
@@ -24,7 +23,11 @@ import tachiyomi.i18n.MR
 
 /** Neutral window: a failed or cancelled prompt never reveals the activity underneath. */
 class UnlockActivity : BaseActivity() {
-    private val session get() = PrivacySessionManager.session
+    private val session get() = if (intent.getBooleanExtra(PRIVATE_CONTENT, false)) {
+        AuthenticationTarget.PRIVATE_CONTENT
+    } else {
+        AuthenticationTarget.APP
+    }
     private val authentication: PrivacyAuthentication by viewModels()
     private var attempt = 0L
 
@@ -32,7 +35,11 @@ class UnlockActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         window.setSecureScreen(true)
         attempt = savedInstanceState?.getLong(ATTEMPT) ?: intent.getLongExtra(ATTEMPT, 0L)
-        val title = stringResource(MR.strings.unlock_app_title, stringResource(MR.strings.app_name))
+        val title = if (session == AuthenticationTarget.PRIVATE_CONTENT) {
+            stringResource(MR.strings.pindorama_show_private_content)
+        } else {
+            stringResource(MR.strings.unlock_app_title, stringResource(MR.strings.app_name))
+        }
         setContentView(
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -54,12 +61,12 @@ class UnlockActivity : BaseActivity() {
             },
         )
         onBackPressedDispatcher.addCallback(this) { closeLocked() }
-        if (session.state.value == PrivacySessionState.AUTHENTICATING && authentication.prompt == null) {
+        if (session.isAuthenticating && authentication.prompt == null) {
             authenticate(title)
         }
         lifecycleScope.launch {
-            session.state.collect {
-                if (it == PrivacySessionState.LOCKED) authentication.cancel()
+            session.isLocked.collect {
+                if (it) authentication.cancel()
             }
         }
     }
@@ -101,7 +108,10 @@ class UnlockActivity : BaseActivity() {
                     } else {
                         currentSession.authenticationCancelled(currentAttempt)
                     }
-                    if (currentSession.state.value == PrivacySessionState.UNLOCKED) activity?.finish()
+                    if (currentSession.isUnlocked) {
+                        activity?.setResult(RESULT_OK)
+                        activity?.finish()
+                    }
                 }
             },
         )
@@ -115,10 +125,11 @@ class UnlockActivity : BaseActivity() {
     private fun closeLocked() {
         session.authenticationCancelled(attempt)
         authentication.cancel()
-        finishAffinity()
+        if (session == AuthenticationTarget.PRIVATE_CONTENT) finish() else finishAffinity()
     }
 
     companion object {
+        const val PRIVATE_CONTENT = "private_content_authentication"
         const val ATTEMPT = "privacy_authentication_attempt"
     }
 }

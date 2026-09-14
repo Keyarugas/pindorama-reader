@@ -12,11 +12,16 @@ import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import eu.kanade.core.util.fastCountNot
 import eu.kanade.presentation.more.stats.StatsScreenState
 import eu.kanade.presentation.more.stats.data.StatsData
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.history.interactor.GetTotalReadDuration
@@ -26,6 +31,8 @@ import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_HAS_U
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_COMPLETED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_READ
 import tachiyomi.domain.manga.interactor.GetLibraryManga
+import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.manga.service.MangaVisibilityPolicy
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.model.Track
 import tachiyomi.source.local.isLocal
@@ -34,6 +41,8 @@ import tachiyomi.source.local.isLocal
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class StatsViewModel(
+    private val privateVisibility: PrivateContentVisibility,
+    private val mangaRepository: MangaRepository,
     private val downloadManager: DownloadManager,
     private val getLibraryManga: GetLibraryManga,
     private val getTotalReadDuration: GetTotalReadDuration,
@@ -49,49 +58,66 @@ class StatsViewModel(
 
     init {
         viewModelScope.launchIO {
-            val libraryManga = getLibraryManga.await()
+            combine(
+                getLibraryManga.subscribe(),
+                privateVisibility.privateIds,
+                PrivateContentSessionManager.session.state,
+            ) { library, ids, session -> Triple(library, ids, session) }
+                .collectLatest { (library, ids, session) ->
+                    state.value = StatsScreenState.Loading
+                    val privateIds = ids ?: return@collectLatest
+                    val libraryManga = MangaVisibilityPolicy.filter(library, privateIds, session) { it.id }
+                    val includePrivate = session == PrivateContentSessionState.UNLOCKED
+                    val hiddenDownloadCount = if (includePrivate) {
+                        0
+                    } else {
+                        privateIds.sumOf {
+                            downloadManager.getDownloadCount(mangaRepository.getMangaById(it))
+                        }
+                    }
 
-            val distinctLibraryManga = libraryManga.fastDistinctBy { it.id }
+                    val distinctLibraryManga = libraryManga.fastDistinctBy { it.id }
 
-            val mangaTrackMap = getMangaTrackMap(distinctLibraryManga)
-            val scoredMangaTrackerMap = getScoredMangaTrackMap(mangaTrackMap)
+                    val mangaTrackMap = getMangaTrackMap(distinctLibraryManga)
+                    val scoredMangaTrackerMap = getScoredMangaTrackMap(mangaTrackMap)
 
-            val meanScore = getTrackMeanScore(scoredMangaTrackerMap)
+                    val meanScore = getTrackMeanScore(scoredMangaTrackerMap)
 
-            val overviewStatData = StatsData.Overview(
-                libraryMangaCount = distinctLibraryManga.size,
-                completedMangaCount = distinctLibraryManga.count {
-                    it.manga.status.toInt() == SManga.COMPLETED && it.unreadCount == 0L
-                },
-                totalReadDuration = getTotalReadDuration.await(),
-            )
+                    val overviewStatData = StatsData.Overview(
+                        libraryMangaCount = distinctLibraryManga.size,
+                        completedMangaCount = distinctLibraryManga.count {
+                            it.manga.status.toInt() == SManga.COMPLETED && it.unreadCount == 0L
+                        },
+                        totalReadDuration = getTotalReadDuration.await(includePrivate),
+                    )
 
-            val titlesStatData = StatsData.Titles(
-                globalUpdateItemCount = getGlobalUpdateItemCount(libraryManga),
-                startedMangaCount = distinctLibraryManga.count { it.hasStarted },
-                localMangaCount = distinctLibraryManga.count { it.manga.isLocal() },
-            )
+                    val titlesStatData = StatsData.Titles(
+                        globalUpdateItemCount = getGlobalUpdateItemCount(libraryManga),
+                        startedMangaCount = distinctLibraryManga.count { it.hasStarted },
+                        localMangaCount = distinctLibraryManga.count { it.manga.isLocal() },
+                    )
 
-            val chaptersStatData = StatsData.Chapters(
-                totalChapterCount = distinctLibraryManga.sumOf { it.totalChapters }.toInt(),
-                readChapterCount = distinctLibraryManga.sumOf { it.readCount }.toInt(),
-                downloadCount = downloadManager.getDownloadCount(),
-            )
+                    val chaptersStatData = StatsData.Chapters(
+                        totalChapterCount = distinctLibraryManga.sumOf { it.totalChapters }.toInt(),
+                        readChapterCount = distinctLibraryManga.sumOf { it.readCount }.toInt(),
+                        downloadCount = (downloadManager.getDownloadCount() - hiddenDownloadCount).coerceAtLeast(0),
+                    )
 
-            val trackersStatData = StatsData.Trackers(
-                trackedTitleCount = mangaTrackMap.count { it.value.isNotEmpty() },
-                meanScore = meanScore,
-                trackerCount = loggedInTrackers.size,
-            )
+                    val trackersStatData = StatsData.Trackers(
+                        trackedTitleCount = mangaTrackMap.count { it.value.isNotEmpty() },
+                        meanScore = meanScore,
+                        trackerCount = loggedInTrackers.size,
+                    )
 
-            state.update {
-                StatsScreenState.Success(
-                    overview = overviewStatData,
-                    titles = titlesStatData,
-                    chapters = chaptersStatData,
-                    trackers = trackersStatData,
-                )
-            }
+                    state.update {
+                        StatsScreenState.Success(
+                            overview = overviewStatData,
+                            titles = titlesStatData,
+                            chapters = chaptersStatData,
+                            trackers = trackersStatData,
+                        )
+                    }
+                }
         }
     }
 

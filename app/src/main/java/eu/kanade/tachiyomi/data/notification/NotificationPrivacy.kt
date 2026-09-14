@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.data.notification.NotificationPrivacyPolicy.Event
 import eu.kanade.tachiyomi.util.system.notificationManager
 import mihon.app.di.appGraph
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 
 /** Rebuild presentation from a whitelist; never carry pictures, custom views or arbitrary extras across. */
@@ -17,11 +18,13 @@ fun Context.applyNotificationPrivacy(
     original: Notification,
     level: NotificationPrivacyLevel = appGraph.securityPreferences.notificationPrivacyLevel.get(),
 ): Notification {
-    if (level == NotificationPrivacyLevel.NORMAL) return original
+    val minimumPrivate = original.extras?.getBoolean(PRIVATE_CONTENT) == true || requiresPrivateContent(original)
+    val effectiveLevel = NotificationPrivacyPolicy.effectiveLevel(level, minimumPrivate)
+    if (effectiveLevel == NotificationPrivacyLevel.NORMAL) return original
     val event = original.extras?.getString(PRIVACY_EVENT)?.let { name -> Event.entries.find { it.name == name } }
         ?: notificationEvent(original)
     val content = NotificationPrivacyPolicy.transform(
-        level,
+        effectiveLevel,
         event,
         NotificationPrivacyPolicy.Content("", null),
         stringResource(MR.strings.app_name),
@@ -56,6 +59,8 @@ fun Context.applyNotificationPrivacy(
         )
     }
     builder.extras.putString(PRIVACY_EVENT, event.name)
+    builder.extras.putBoolean(PRIVATE_CONTENT, minimumPrivate)
+    original.extras?.getLongArray(MANGA_IDS)?.let { builder.extras.putLongArray(MANGA_IDS, it) }
     return builder.build().apply {
         flags = flags or (original.flags and Notification.FLAG_FOREGROUND_SERVICE)
     }
@@ -63,7 +68,6 @@ fun Context.applyNotificationPrivacy(
 
 /** Called when the user chooses a level so already-posted content is redacted too. */
 fun Context.refreshNotificationPrivacy(level: NotificationPrivacyLevel) {
-    if (level == NotificationPrivacyLevel.NORMAL) return // Detailed content returns on the next task update.
     notificationManager.activeNotifications.forEach {
         val protected = applyNotificationPrivacy(it.notification, level).apply {
             flags = flags or Notification.FLAG_ONLY_ALERT_ONCE
@@ -126,3 +130,35 @@ private fun Context.notificationEvent(notification: Notification): Event {
 }
 
 private const val PRIVACY_EVENT = "pindorama.notification.privacy.event"
+
+/** Attach only technical IDs, before build() applies the presentation policy. */
+fun NotificationCompat.Builder.setMangaPrivacy(manga: List<Manga>): NotificationCompat.Builder = apply {
+    extras.putLongArray(MANGA_IDS, manga.map { it.id }.toLongArray())
+    extras.putBoolean(PRIVATE_CONTENT, manga.any { it.isPrivate })
+}
+
+fun NotificationCompat.Builder.setMangaPrivacyIds(ids: List<Long>?): NotificationCompat.Builder = apply {
+    extras.remove(PRIVATE_CONTENT)
+    if (ids == null) extras.remove(MANGA_IDS) else extras.putLongArray(MANGA_IDS, ids.toLongArray())
+}
+
+private fun Context.requiresPrivateContent(notification: Notification): Boolean {
+    val ids = notification.extras?.getLongArray(MANGA_IDS)
+    val privateIds = appGraph.privateContentVisibility.privateIds.value
+    if (ids != null) return NotificationPrivacyPolicy.requiresPrivateContent(ids.toSet(), privateIds)
+    // Old notifications and producers without an originating manga cannot safely prove public content.
+    val mayContainManga = notification.channelId in setOf(
+        Notifications.CHANNEL_LIBRARY_PROGRESS,
+        Notifications.CHANNEL_LIBRARY_ERROR,
+        Notifications.CHANNEL_NEW_CHAPTERS,
+        Notifications.CHANNEL_DOWNLOADER_PROGRESS,
+        Notifications.CHANNEL_DOWNLOADER_ERROR,
+        Notifications.CHANNEL_BACKUP_RESTORE_PROGRESS,
+        Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE,
+        Notifications.CHANNEL_COMMON,
+    )
+    return mayContainManga && NotificationPrivacyPolicy.requiresPrivateContent(null, privateIds)
+}
+
+private const val PRIVATE_CONTENT = "pindorama.notification.private_content"
+private const val MANGA_IDS = "pindorama.notification.manga_ids"

@@ -37,9 +37,11 @@ import eu.kanade.tachiyomi.data.coil.MangaCoverFetcher
 import eu.kanade.tachiyomi.data.coil.MangaCoverKeyer
 import eu.kanade.tachiyomi.data.coil.MangaKeyer
 import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.data.notification.refreshNotificationPrivacy
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.security.PrivacySessionManager
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.WebViewUtil
 import eu.kanade.tachiyomi.util.system.animatorDurationScale
@@ -126,9 +128,15 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         setupNotificationChannels()
 
         PrivacySessionManager.initialize(this)
+        PrivateContentSessionManager.initialize(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
 
         val scope = ProcessLifecycleOwner.get().lifecycleScope
+        graph.privateContentVisibility.privateIds
+            .onEach { ids ->
+                if (ids != null) refreshNotificationPrivacy(graph.securityPreferences.notificationPrivacyLevel.get())
+            }
+            .launchIn(scope)
 
         // Show notification to disable Incognito Mode when it's enabled
         basePreferences.incognitoMode.changes()
@@ -250,6 +258,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
     override fun onStop(owner: LifecycleOwner) {
         PrivacySessionManager.onBackground(this)
+        PrivateContentSessionManager.onBackground()
     }
 
     override fun getPackageName(): String {

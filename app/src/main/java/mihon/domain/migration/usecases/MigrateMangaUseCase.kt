@@ -124,6 +124,7 @@ class MigrateMangaUseCase(
             val targetMangaUpdate = MangaUpdate(
                 id = target.id,
                 favorite = true,
+                isPrivate = current.isPrivate || target.isPrivate,
                 chapterFlags = current.chapterFlags,
                 viewerFlags = current.viewerFlags,
                 dateAdded = if (replace) current.dateAdded else Clock.System.now().toEpochMilliseconds(),

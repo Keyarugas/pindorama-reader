@@ -71,5 +71,8 @@ SET
 WHERE chapter_id = :chapterId;
 
 getReadDuration:
-SELECT coalesce(sum(time_read), 0)
-FROM history;
+SELECT coalesce(sum(history.time_read), 0)
+FROM history
+JOIN chapters ON chapters._id = history.chapter_id
+JOIN mangas ON mangas._id = chapters.manga_id
+WHERE :includePrivate OR mangas.is_private = 0;

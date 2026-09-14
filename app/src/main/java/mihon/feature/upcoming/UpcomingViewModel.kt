@@ -11,12 +11,12 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import eu.kanade.core.util.insertSeparatorsReversed
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -36,12 +36,12 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.upcoming.service.UpcomingPreferences
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.seconds
 
 @Inject
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class UpcomingViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     private val getUpcomingManga: GetUpcomingManga,
     val getCategories: GetCategories,
     val upcomingPreferences: UpcomingPreferences,
@@ -72,15 +72,17 @@ class UpcomingViewModel(
     private val upcoming = getUpcomingItemPreferenceFlow()
         .distinctUntilChanged()
         .flatMapLatest {
-            getUpcomingManga.subscribe(
-                excludedCategories = it.filterExcludedCategories,
-                includedCategories = it.filterIncludedCategories,
-            )
+            privateVisibility.filter(
+                getUpcomingManga.subscribe(
+                    excludedCategories = it.filterExcludedCategories,
+                    includedCategories = it.filterIncludedCategories,
+                ),
+            ) { it.id }
         }
         .distinctUntilChanged()
         .map { it.toUpcomingUIModels() }
         .flowOn(Dispatchers.IO)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<State> = combine(
         upcoming,
@@ -99,7 +101,7 @@ class UpcomingViewModel(
     }
         .stateIn(
             viewModelScope,
-            SharingStarted.WhileSubscribed(5.seconds),
+            SharingStarted.Eagerly,
             State(selectedYearMonth = selectedYearMonth.value),
         )
 

@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.data.download.Downloader
 import eu.kanade.tachiyomi.data.notification.NotificationHandler
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.data.notification.setMangaPrivacy
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.util.lang.chop
@@ -90,6 +91,7 @@ class LibraryUpdateNotifier(
      */
     fun showProgressNotification(manga: List<Manga>, current: Int, total: Int) {
         progressNotificationBuilder
+            .setMangaPrivacy(manga)
             .setContentTitle(
                 context.stringResource(
                     MR.strings.notification_updating_progress,
@@ -171,6 +173,7 @@ class LibraryUpdateNotifier(
             Notifications.ID_NEW_CHAPTERS,
             Notifications.CHANNEL_NEW_CHAPTERS,
         ) {
+            setMangaPrivacy(updates.map { it.first })
             setContentTitle(context.stringResource(MR.strings.notification_new_chapters))
             if (updates.size == 1 && !securityPreferences.hideNotificationContent.get()) {
                 setContentText(updates.first().first.title.chop(NOTIF_TITLE_MAX_LEN))
@@ -224,6 +227,7 @@ class LibraryUpdateNotifier(
     private suspend fun createNewChaptersNotification(manga: Manga, chapters: Array<Chapter>): Notification {
         val icon = getMangaIcon(manga)
         return context.notificationBuilder(Notifications.CHANNEL_NEW_CHAPTERS) {
+            setMangaPrivacy(listOf(manga))
             setContentTitle(manga.title)
 
             val description = getNewChaptersDescription(chapters)

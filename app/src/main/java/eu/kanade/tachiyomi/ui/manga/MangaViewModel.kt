@@ -34,6 +34,7 @@ import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
@@ -42,6 +43,7 @@ import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
 import eu.kanade.tachiyomi.util.system.toast
@@ -82,6 +84,7 @@ import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.manga.repository.MangaRepository
@@ -133,6 +136,17 @@ class MangaViewModel(
     @ContributesIntoMap(AppScope::class)
     interface Factory : ManualViewModelAssistedFactory {
         fun create(mangaId: Long, isFromSource: Boolean): MangaViewModel
+    }
+
+    suspend fun togglePrivacy(): Boolean {
+        val manga = successState?.manga ?: return false
+        val privateSession = PrivateContentSessionManager.session
+        if (manga.isPrivate && privateSession.state.value != PrivateContentSessionState.UNLOCKED) return false
+        if (!mangaRepository.update(MangaUpdate(manga.id, isPrivate = !manga.isPrivate))) {
+            snackbarHostState.showSnackbar(context.stringResource(MR.strings.internal_error))
+            return false
+        }
+        return !manga.isPrivate && privateSession.state.value != PrivateContentSessionState.UNLOCKED
     }
 
     val snackbarHostState: SnackbarHostState = SnackbarHostState()

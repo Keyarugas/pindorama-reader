@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.databinding.DownloadListBinding
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,10 +32,13 @@ import kotlin.time.Duration.Companion.seconds
 @ViewModelKey
 @ContributesIntoMap(AppScope::class)
 class DownloadQueueViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     private val downloadManager: DownloadManager,
 ) : ViewModel() {
 
-    val state: StateFlow<List<DownloadHeaderItem>> = downloadManager.queueState
+    val state: StateFlow<List<DownloadHeaderItem>> = privateVisibility.filter(downloadManager.queueState) {
+        it.manga.id
+    }
         .map { downloads ->
             downloads
                 .groupBy { it.source }
@@ -44,7 +48,7 @@ class DownloadQueueViewModel(
                     }
                 }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     lateinit var controllerBinding: DownloadListBinding
 
@@ -157,7 +161,9 @@ class DownloadQueueViewModel(
     }
 
     fun reorder(downloads: List<Download>) {
-        downloadManager.reorderQueue(downloads)
+        downloadManager.reorderQueue(
+            preserveHiddenDownloadOrder(downloadManager.queueState.value, downloads) { it.chapter.id },
+        )
     }
 
     fun cancel(downloads: List<Download>) {

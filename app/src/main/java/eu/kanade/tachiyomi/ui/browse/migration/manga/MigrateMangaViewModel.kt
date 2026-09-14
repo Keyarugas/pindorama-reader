@@ -11,6 +11,7 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactory
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactoryKey
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
@@ -32,10 +32,10 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
-import kotlin.time.Duration.Companion.seconds
 
 @AssistedInject
 class MigrateMangaViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     @Assisted private val sourceId: Long,
     private val sourceManager: SourceManager,
     private val getFavorites: GetFavorites,
@@ -55,7 +55,7 @@ class MigrateMangaViewModel(
 
     private val selection = MutableStateFlow(emptySet<Long>())
 
-    private val favorites = getFavorites.subscribe(sourceId)
+    private val favorites = privateVisibility.filter(getFavorites.subscribe(sourceId)) { it.id }
         .catch {
             logcat(LogPriority.ERROR, it)
             _events.send(MigrationMangaEvent.FailedFetchingFavorites)
@@ -69,10 +69,18 @@ class MigrateMangaViewModel(
         favorites,
         selection,
     ) { titleList, selection ->
-        State(source = source.await(), selection = selection, titleList = titleList)
+        State(
+            source = source.await(),
+            selection = selection.intersect(
+                titleList.map {
+                    it.id
+                }.toSet(),
+            ),
+            titleList = titleList,
+        )
     }
         .flowOn(Dispatchers.IO)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), State())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, State())
 
     fun toggleSelection(item: Manga) {
         selection.update { selection ->

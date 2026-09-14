@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.ui.home
 
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.history.model.HistoryWithRelations
 import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.domain.manga.service.MangaVisibilityPolicy
 import tachiyomi.domain.updates.model.UpdatesWithRelations
 import java.util.Date
 import kotlin.time.Duration.Companion.days
@@ -43,6 +45,34 @@ class PindoramaHomeViewModelTest {
             listOf(update(mangaId), update(mangaId))
         }
         assertEquals(listOf(1L, 2L, 3L, 4L, 5L), PindoramaHomeViewModel.recentUpdates(items).map { it.mangaId })
+    }
+
+    @Test
+    fun `home selection updates and metrics follow private session`() {
+        val now = 10_000_000L
+        PrivateContentSessionState.entries.forEach { session ->
+            val history = MangaVisibilityPolicy.filter(
+                listOf(history(2, now), history(1, now - 1_000)),
+                setOf(2L),
+                session,
+            ) { it.mangaId }
+            val updates = MangaVisibilityPolicy.filter(
+                listOf(update(2), update(1)),
+                setOf(2L),
+                session,
+            ) { it.mangaId }
+            val unlocked = session == PrivateContentSessionState.UNLOCKED
+            assertEquals(if (unlocked) 2L else 1L, PindoramaHomeViewModel.selectContinueReading(history)?.mangaId)
+            val count = if (unlocked) 2 else 1
+            assertEquals(
+                PindoramaHomeViewModel.ActivitySummary(count, count),
+                PindoramaHomeViewModel.activity(history, now),
+            )
+            assertEquals(
+                if (unlocked) listOf(2L, 1L) else listOf(1L),
+                PindoramaHomeViewModel.recentUpdates(updates).map { it.mangaId },
+            )
+        }
     }
 
     private fun history(mangaId: Long, readAt: Long) = HistoryWithRelations(

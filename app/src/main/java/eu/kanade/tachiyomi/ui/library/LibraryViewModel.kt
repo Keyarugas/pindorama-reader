@@ -19,12 +19,15 @@ import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.presentation.library.components.LibraryToolbarTitle
 import eu.kanade.presentation.manga.DownloadAction
+import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
+import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.Dispatchers
@@ -32,14 +35,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import mihon.core.common.utils.mutate
@@ -77,6 +81,7 @@ import kotlin.time.Duration.Companion.seconds
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class LibraryViewModel(
+    private val privateVisibility: PrivateContentVisibility,
     private val getLibraryManga: GetLibraryManga,
     private val getCategories: GetCategories,
     private val getTracksPerManga: GetTracksPerManga,
@@ -100,6 +105,16 @@ class LibraryViewModel(
     private val selection = MutableStateFlow(emptySet</* Manga */ Long>())
 
     private val dialog = MutableStateFlow<Dialog?>(null)
+
+    init {
+        PrivateContentSessionManager.session.state.onEach {
+            if (it != PrivateContentSessionState.UNLOCKED) {
+                dialog.value = null
+                selection.value = emptySet()
+                searchQuery.value = null
+            }
+        }.launchIn(viewModelScope)
+    }
 
     private val activeCategoryIndex = MutableStateFlow(libraryPreferences.lastUsedCategory.get())
 
@@ -167,7 +182,7 @@ class LibraryViewModel(
             )
         }
         .flowOn(Dispatchers.IO)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val state: StateFlow<State> = combine(
         library,
@@ -177,7 +192,7 @@ class LibraryViewModel(
         State(
             isLoading = library == null,
             searchQuery = searchQuery,
-            selection = selection,
+            selection = selection.intersect(library?.data?.favoritesById?.keys.orEmpty()),
             hasActiveFilters = hasActiveFilters,
             showCategoryTabs = display.showCategoryTabs,
             showMangaCount = display.showMangaCount,
@@ -188,7 +203,7 @@ class LibraryViewModel(
             groupedFavorites = library?.groupedFavorites.orEmpty(),
         )
     }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), State())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, State())
 
     private data class DisplayPreferences(
         val showCategoryTabs: Boolean,
@@ -401,7 +416,7 @@ class LibraryViewModel(
 
     private fun getFavoritesFlow(): Flow<List<LibraryItem>> {
         return combine(
-            getLibraryManga.subscribe(),
+            privateVisibility.filter(getLibraryManga.subscribe()) { it.manga.id },
             getLibraryItemPreferencesFlow(),
             downloadCache.changes,
         ) { libraryManga, preferences, _ ->

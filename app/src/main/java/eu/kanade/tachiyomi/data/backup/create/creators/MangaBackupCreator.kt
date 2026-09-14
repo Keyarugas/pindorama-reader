@@ -86,7 +86,7 @@ class MangaBackupCreator(
     }
 }
 
-private fun Manga.toBackupManga() =
+internal fun Manga.toBackupManga() =
     BackupManga(
         url = this.url,
         title = this.title,
@@ -107,6 +107,7 @@ private fun Manga.toBackupManga() =
         favoriteModifiedAt = this.favoriteModifiedAt,
         version = this.version,
         notes = this.notes,
+        isPrivate = this.isPrivate,
         initialized = this.initialized,
         memo = MemoColumnAdapter.encode(this.memo),
     )

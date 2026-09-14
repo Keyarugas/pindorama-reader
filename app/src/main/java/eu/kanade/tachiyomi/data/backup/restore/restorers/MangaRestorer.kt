@@ -97,6 +97,7 @@ class MangaRestorer(
     private fun Manga.copyFrom(newer: Manga): Manga {
         return this.copy(
             favorite = this.favorite || newer.favorite,
+            isPrivate = this.isPrivate || newer.isPrivate,
             author = newer.author,
             artist = newer.artist,
             description = newer.description,
@@ -133,6 +134,7 @@ class MangaRestorer(
             version = manga.version,
             isSyncing = 1,
             notes = manga.notes,
+            isPrivate = manga.isPrivate,
             memo = manga.memo.let(MemoColumnAdapter::encode),
         )
         return manga
@@ -265,6 +267,7 @@ class MangaRestorer(
             updateStrategy = manga.updateStrategy,
             version = manga.version,
             notes = manga.notes,
+            isPrivate = manga.isPrivate,
             memo = manga.memo,
         )
             .awaitAsOne()

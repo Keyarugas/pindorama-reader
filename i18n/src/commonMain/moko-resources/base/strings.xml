@@ -1118,7 +1118,14 @@
     <string name="pindorama_notification_restore_complete">Restore completed</string>
     <string name="pindorama_notification_sync_progress">Library sync in progress</string>
     <string name="pindorama_notification_sync_complete">Library sync completed</string>
-    <string name="pindorama_app_lock_info">Uses Android biometrics or device credentials. Recent-app previews are hidden while app lock is enabled.</string>
+    <string name="pindorama_app_lock_info">Protects the entire app using Android biometrics or device credentials. Unlocking the app does not unlock private content. Recent-app previews are hidden while app lock is enabled.</string>
     <string name="pindorama_lock_screen_off">Lock when the screen turns off</string>
     <string name="pindorama_unlock_info">Authenticate to continue. If authentication is unavailable, check the Android screen lock and try again.</string>
+    <string name="pindorama_make_private">Make private</string>
+    <string name="pindorama_remove_privacy">Remove privacy</string>
+    <string name="pindorama_private_manga">Private manga</string>
+    <string name="pindorama_private_library_info">Private works remain hidden until you unlock private content from the Library menu. This is independent of app lock. Private content locks again when you leave the app or turn off the screen.</string>
+    <string name="pindorama_show_private_content">Show private content</string>
+    <string name="pindorama_hide_private_content">Hide private content</string>
+    <string name="pindorama_private_content_locked">Private content is hidden. Authenticate to continue.</string>
 </resources>
