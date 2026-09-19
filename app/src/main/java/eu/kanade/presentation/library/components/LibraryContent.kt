@@ -17,9 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.tachiyomi.ui.library.LibraryItem
+import eu.kanade.tachiyomi.ui.library.LibraryPage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.presentation.core.components.material.PullRefresh
@@ -27,7 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun LibraryContent(
-    categories: List<Category>,
+    pages: List<LibraryPage>,
     searchQuery: String?,
     selection: Set<Long>,
     contentPadding: PaddingValues,
@@ -37,14 +37,14 @@ fun LibraryContent(
     onChangeCurrentPage: (Int) -> Unit,
     onClickManga: (Long) -> Unit,
     onContinueReadingClicked: ((LibraryManga) -> Unit)?,
-    onToggleSelection: (Category, LibraryManga) -> Unit,
-    onToggleRangeSelection: (Category, LibraryManga) -> Unit,
+    onToggleSelection: (LibraryPage, LibraryManga) -> Unit,
+    onToggleRangeSelection: (LibraryPage, LibraryManga) -> Unit,
     onRefresh: () -> Boolean,
     onGlobalSearchClicked: () -> Unit,
-    getItemCountForCategory: (Category) -> Int?,
+    getItemCountForPage: (LibraryPage) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
-    getItemsForCategory: (Category) -> List<LibraryItem>,
+    getItemsForPage: (LibraryPage) -> List<LibraryItem>,
 ) {
     Column(
         modifier = Modifier.padding(
@@ -53,21 +53,28 @@ fun LibraryContent(
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
     ) {
-        val pagerState = rememberPagerState(currentPage) { categories.size }
+        val pagerState = rememberPagerState(currentPage) { pages.size }
+        LaunchedEffect(currentPage, pages) {
+            if (pages.isNotEmpty() && pagerState.currentPage != currentPage) {
+                pagerState.scrollToPage(currentPage.coerceIn(0, pages.lastIndex))
+            }
+        }
 
         val scope = rememberCoroutineScope()
         var isRefreshing by remember(pagerState.currentPage) { mutableStateOf(false) }
 
-        if (showPageTabs && categories.isNotEmpty() && (categories.size > 1 || !categories.first().isSystemCategory)) {
-            LaunchedEffect(categories) {
-                if (categories.size <= pagerState.currentPage) {
-                    pagerState.scrollToPage(categories.size - 1)
+        if (showPageTabs && pages.isNotEmpty() &&
+            (pages.size > 1 || (pages.first() as? LibraryPage.Normal)?.category?.isSystemCategory != true)
+        ) {
+            LaunchedEffect(pages) {
+                if (pages.isNotEmpty() && pages.size <= pagerState.currentPage) {
+                    pagerState.scrollToPage(pages.size - 1)
                 }
             }
             LibraryTabs(
-                categories = categories,
+                pages = pages,
                 pagerState = pagerState,
-                getItemCountForCategory = getItemCountForCategory,
+                getItemCountForPage = getItemCountForPage,
                 onTabItemClick = {
                     scope.launch {
                         pagerState.animateScrollToPage(it)
@@ -97,10 +104,10 @@ fun LibraryContent(
                 selection = selection,
                 searchQuery = searchQuery,
                 onGlobalSearchClicked = onGlobalSearchClicked,
-                getCategoryForPage = { page -> categories[page] },
+                getPage = { page -> pages.getOrNull(page) },
                 getDisplayMode = getDisplayMode,
                 getColumnsForOrientation = getColumnsForOrientation,
-                getItemsForCategory = getItemsForCategory,
+                getItemsForPage = getItemsForPage,
                 onClickManga = { category, manga ->
                     if (selection.isNotEmpty()) {
                         onToggleSelection(category, manga)

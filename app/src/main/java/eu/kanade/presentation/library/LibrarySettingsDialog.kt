@@ -43,12 +43,13 @@ fun LibrarySettingsDialog(
     onDismissRequest: () -> Unit,
     viewModel: LibrarySettingsViewModel,
     category: Category?,
+    showCategorySort: Boolean = true,
 ) {
     TabbedDialog(
         onDismissRequest = onDismissRequest,
-        tabTitles = listOf(
+        tabTitles = listOfNotNull(
             stringResource(MR.strings.action_filter),
-            stringResource(MR.strings.action_sort),
+            stringResource(MR.strings.action_sort).takeIf { showCategorySort },
             stringResource(MR.strings.action_display),
         ),
     ) { page ->
@@ -57,7 +58,7 @@ fun LibrarySettingsDialog(
                 .padding(vertical = TabbedDialogPaddings.Vertical)
                 .verticalScroll(rememberScrollState()),
         ) {
-            when (page) {
+            when (if (!showCategorySort && page == 1) 2 else page) {
                 0 -> FilterPage(
                     viewModel = viewModel,
                 )
