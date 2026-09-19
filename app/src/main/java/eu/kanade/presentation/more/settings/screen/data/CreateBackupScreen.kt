@@ -86,6 +86,10 @@ class CreateBackupScreen : Screen() {
                     }
                 },
             ) {
+                item {
+                    WarningBanner(MR.strings.pindorama_backup_conventional_warning)
+                }
+
                 if (DeviceUtil.isMiui && DeviceUtil.isMiuiOptimizationDisabled()) {
                     item {
                         WarningBanner(MR.strings.restore_miui_warning)

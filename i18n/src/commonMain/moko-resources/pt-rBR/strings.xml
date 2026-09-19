@@ -959,4 +959,11 @@
     <string name="pindorama_hide_private_content">Ocultar conteúdo privado</string>
     <string name="pindorama_private_content_locked">O conteúdo privado está oculto. Autentique-se para continuar.</string>
     <string name="pindorama_private_library_tab">Privadas</string>
+    <string name="pindorama_backup_protection_required">Backup não criado. É necessária uma configuração de backup protegida. Backups protegidos ainda não estão disponíveis nesta versão.</string>
+    <string name="pindorama_backup_conventional_warning">Backups convencionais não possuem criptografia. Esses arquivos podem revelar sua biblioteca, histórico de leitura e configurações. Backups que incluam obras privadas são bloqueados.</string>
+    <string name="pindorama_backup_invalid">O arquivo de backup é inválido, está incompleto ou não é compatível.</string>
+    <string name="pindorama_backup_read_limit">O backup excede o limite de leitura segura desta versão. O arquivo não foi restaurado.</string>
+    <string name="pindorama_backup_io_error">Não foi possível acessar o backup. Verifique o armazenamento e as permissões.</string>
+    <string name="pindorama_backup_destination_not_empty">Escolha um arquivo novo e vazio. Backups existentes não serão sobrescritos.</string>
+    <string name="pindorama_backup_operation_failed">Não foi possível concluir a operação de backup.</string>
 </resources>

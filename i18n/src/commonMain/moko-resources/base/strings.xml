@@ -1129,4 +1129,11 @@
     <string name="pindorama_hide_private_content">Hide private content</string>
     <string name="pindorama_private_content_locked">Private content is hidden. Authenticate to continue.</string>
     <string name="pindorama_private_library_tab">Private</string>
+    <string name="pindorama_backup_protection_required">Backup not created. A protected backup configuration is required. Protected backups are not available in this version.</string>
+    <string name="pindorama_backup_conventional_warning">Conventional backups are not encrypted. These files can expose your library, reading history and settings. Backups that include private works are blocked.</string>
+    <string name="pindorama_backup_invalid">The backup file is invalid, incomplete or unsupported.</string>
+    <string name="pindorama_backup_read_limit">The backup exceeds the safe reading limit of this version. The file has not been restored.</string>
+    <string name="pindorama_backup_io_error">Unable to access the backup. Check storage availability and permissions.</string>
+    <string name="pindorama_backup_destination_not_empty">Choose a new, empty file. Existing backups will not be overwritten.</string>
+    <string name="pindorama_backup_operation_failed">The backup operation could not be completed.</string>
 </resources>

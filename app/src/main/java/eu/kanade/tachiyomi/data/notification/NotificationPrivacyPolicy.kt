@@ -12,6 +12,7 @@ object NotificationPrivacyPolicy {
         DOWNLOAD_PROGRESS,
         DOWNLOAD_PAUSED,
         BACKUP_PROGRESS,
+        BACKUP_PROTECTION_REQUIRED,
         BACKUP_COMPLETE,
         RESTORE_PROGRESS,
         RESTORE_COMPLETE,
@@ -31,8 +32,13 @@ object NotificationPrivacyPolicy {
         val number: Int = 0,
     )
 
-    fun requiresPrivateContent(mangaIds: Set<Long>?, privateIds: Set<Long>?): Boolean =
-        privateIds == null || if (mangaIds == null) privateIds.isNotEmpty() else mangaIds.any { it in privateIds }
+    fun requiresPrivateContent(
+        mangaIds: Set<Long>?,
+        privateIds: Set<Long>?,
+        isBackupOperation: Boolean = false,
+    ): Boolean =
+        isBackupOperation || privateIds == null ||
+            if (mangaIds == null) privateIds.isNotEmpty() else mangaIds.any { it in privateIds }
 
     fun effectiveLevel(global: NotificationPrivacyLevel, containsPrivateContent: Boolean): NotificationPrivacyLevel =
         if (containsPrivateContent) NotificationPrivacyLevel.PRIVATE else global
@@ -44,6 +50,9 @@ object NotificationPrivacyPolicy {
         appName: String,
         resolve: (StringResource) -> String,
     ): Content {
+        if (event == Event.BACKUP_PROTECTION_REQUIRED) {
+            return Content(appName, resolve(MR.strings.pindorama_backup_protection_required))
+        }
         if (level == NotificationPrivacyLevel.NORMAL) return original
         return Content(appName, resolve(message(level, event)))
     }

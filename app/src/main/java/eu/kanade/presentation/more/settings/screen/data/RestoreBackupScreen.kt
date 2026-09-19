@@ -34,11 +34,13 @@ import dev.zacsweers.metrox.viewmodel.assistedMetroViewModel
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.WarningBanner
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.data.backup.BackupError
 import eu.kanade.tachiyomi.data.backup.BackupFileValidator
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.workManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -127,22 +129,12 @@ class RestoreBackupScreen(
                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                                         appendLine(stringResource(MR.strings.backup_restore_missing_sources))
                                     }
-                                    error.sources.joinTo(
-                                        this,
-                                        separator = "\n- ",
-                                        prefix = "- ",
-                                    )
                                 }
                                 if (error.trackers.isNotEmpty()) {
                                     appendLine()
                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                                         appendLine(stringResource(MR.strings.backup_restore_missing_trackers))
                                     }
-                                    error.trackers.joinTo(
-                                        this,
-                                        separator = "\n- ",
-                                        prefix = "- ",
-                                    )
                                 }
                             }
 
@@ -150,18 +142,18 @@ class RestoreBackupScreen(
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                                     appendLine(stringResource(MR.strings.invalid_backup_file))
                                 }
-                                appendLine(error.uri.toString())
 
                                 appendLine()
 
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                                     appendLine(stringResource(MR.strings.invalid_backup_file_error))
                                 }
-                                appendLine(error.message)
+                                appendLine(stringResource(error.error.messageRes))
+                                appendLine(error.error.name)
                             }
 
                             else -> {
-                                appendLine(error.toString())
+                                appendLine(stringResource(MR.strings.pindorama_backup_operation_failed))
                             }
                         }
                     }
@@ -218,8 +210,9 @@ class RestoreBackupViewModel(
         val results = try {
             backupFileValidator.validate(uri)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             setError(
-                error = InvalidRestore(uri, e.message.toString()),
+                error = InvalidRestore(BackupError.from(e)),
                 canRestore = false,
             )
             return
@@ -227,7 +220,7 @@ class RestoreBackupViewModel(
 
         if (results.missingSources.isNotEmpty() || results.missingTrackers.isNotEmpty()) {
             setError(
-                error = MissingRestoreComponents(uri, results.missingSources, results.missingTrackers),
+                error = MissingRestoreComponents(results.missingSources, results.missingTrackers),
                 canRestore = true,
             )
             return
@@ -254,12 +247,8 @@ class RestoreBackupViewModel(
 }
 
 private data class MissingRestoreComponents(
-    val uri: Uri,
     val sources: List<String>,
     val trackers: List<String>,
 )
 
-private data class InvalidRestore(
-    val uri: Uri? = null,
-    val message: String,
-)
+private data class InvalidRestore(val error: BackupError)

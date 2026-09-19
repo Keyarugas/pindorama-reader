@@ -13,7 +13,10 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dev.zacsweers.metro.Inject
+import eu.kanade.tachiyomi.data.backup.BackupError
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
+import eu.kanade.tachiyomi.data.backup.BackupOperation
+import eu.kanade.tachiyomi.data.backup.backupDiagnostic
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.isRunning
@@ -22,9 +25,7 @@ import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
 import mihon.app.di.AppGraph
 import mihon.core.metro.metroGraph
-import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.i18n.MR
 
 class BackupRestoreJob(private val context: Context, workerParams: WorkerParameters) :
     CoroutineWorker(context, workerParams) {
@@ -54,11 +55,11 @@ class BackupRestoreJob(private val context: Context, workerParams: WorkerParamet
             Result.success()
         } catch (e: Exception) {
             if (e is CancellationException) {
-                notifier.showRestoreError(context.stringResource(MR.strings.restoring_backup_canceled))
+                notifier.showRestoreError(BackupError.CANCELLED)
                 Result.success()
             } else {
-                logcat(LogPriority.ERROR, e)
-                notifier.showRestoreError(e.message)
+                logcat(LogPriority.ERROR) { backupDiagnostic(BackupOperation.RESTORE, e) }
+                notifier.showRestoreError(BackupError.from(e))
                 Result.failure()
             }
         } finally {

@@ -6,16 +6,15 @@ import androidx.core.app.NotificationCompat
 import com.hippo.unifile.UniFile
 import dev.zacsweers.metro.Inject
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.data.notification.setBackupProtectionRequired
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
 import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.core.common.storage.displayablePath
 import tachiyomi.i18n.MR
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
@@ -23,7 +22,6 @@ import kotlin.time.Duration.Companion.milliseconds
 @Inject
 class BackupNotifier(
     private val context: Context,
-    private val preferences: SecurityPreferences,
 ) {
     private val progressNotificationBuilder = context.notificationBuilder(
         Notifications.CHANNEL_BACKUP_RESTORE_PROGRESS,
@@ -59,13 +57,16 @@ class BackupNotifier(
         return builder
     }
 
-    fun showBackupError(error: String?) {
+    fun showBackupError(error: BackupError) {
         context.cancelNotification(Notifications.ID_BACKUP_PROGRESS)
 
         with(completeNotificationBuilder) {
             setContentTitle(context.stringResource(MR.strings.creating_backup_error))
-            setContentText(error)
+            clearActions()
+            setContentIntent(null)
+            setContentText(context.stringResource(error.messageRes))
 
+            if (error == BackupError.PROTECTION_REQUIRED) setBackupProtectionRequired()
             show(Notifications.ID_BACKUP_COMPLETE)
         }
     }
@@ -75,7 +76,7 @@ class BackupNotifier(
 
         with(completeNotificationBuilder) {
             setContentTitle(context.stringResource(MR.strings.backup_created))
-            setContentText(file.displayablePath)
+            setContentText(context.stringResource(MR.strings.pindorama_backup_conventional_warning))
 
             clearActions()
             addAction(
@@ -89,7 +90,6 @@ class BackupNotifier(
     }
 
     fun showRestoreProgress(
-        content: String = "",
         progress: Int = 0,
         maxAmount: Int = 100,
         sync: Boolean = false,
@@ -102,9 +102,7 @@ class BackupNotifier(
             }
             setContentTitle(contentTitle)
 
-            if (!preferences.hideNotificationContent.get()) {
-                setContentText(content)
-            }
+            setContentText(null)
 
             setProgress(maxAmount, progress, false)
             setOnlyAlertOnce(true)
@@ -122,12 +120,14 @@ class BackupNotifier(
         return builder
     }
 
-    fun showRestoreError(error: String?) {
+    fun showRestoreError(error: BackupError) {
         context.cancelNotification(Notifications.ID_RESTORE_PROGRESS)
 
         with(completeNotificationBuilder) {
             setContentTitle(context.stringResource(MR.strings.restoring_backup_error))
-            setContentText(error)
+            clearActions()
+            setContentIntent(null)
+            setContentText(context.stringResource(error.messageRes))
 
             show(Notifications.ID_RESTORE_COMPLETE)
         }

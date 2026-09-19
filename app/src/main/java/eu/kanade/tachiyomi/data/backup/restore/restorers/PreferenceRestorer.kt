@@ -1,8 +1,9 @@
 package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import android.content.Context
-import android.util.Log
 import dev.zacsweers.metro.Inject
+import eu.kanade.tachiyomi.data.backup.BackupOperation
+import eu.kanade.tachiyomi.data.backup.backupDiagnostic
 import eu.kanade.tachiyomi.data.backup.create.BackupCreateJob
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
@@ -15,9 +16,13 @@ import eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.StringSetPreferenceValue
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.source.sourcePreferences
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import logcat.LogPriority
 import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.plusAssign
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.download.service.DownloadPreferences
@@ -108,7 +113,8 @@ class PreferenceRestorer(
                     }
                 }
             } catch (e: Exception) {
-                Log.e("PreferenceRestorer", "Failed to restore preference <$key>", e)
+                currentCoroutineContext().ensureActive()
+                logcat(LogPriority.WARN) { backupDiagnostic(BackupOperation.RESTORE_PREFERENCE, e) }
             }
         }
     }

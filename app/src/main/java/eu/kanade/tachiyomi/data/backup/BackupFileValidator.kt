@@ -18,11 +18,7 @@ class BackupFileValidator(
      * @return List of missing sources or missing trackers.
      */
     suspend fun validate(uri: Uri): Results {
-        val backup = try {
-            backupDecoder.decode(uri)
-        } catch (e: Exception) {
-            throw IllegalStateException(e)
-        }
+        val backup = backupDecoder.decode(uri)
 
         val sources = backup.backupSources.associate { it.sourceId to it.name }
         val missingSources = sources

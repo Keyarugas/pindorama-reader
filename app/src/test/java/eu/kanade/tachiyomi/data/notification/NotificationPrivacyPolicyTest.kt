@@ -61,7 +61,8 @@ class NotificationPrivacyPolicyTest {
 
     @Test
     fun `normal preserves the exact existing content`() {
-        Event.entries.forEach { assertSame(sensitive, transform(NotificationPrivacyLevel.NORMAL, it)) }
+        Event.entries.filter { it != Event.BACKUP_PROTECTION_REQUIRED }
+            .forEach { assertSame(sensitive, transform(NotificationPrivacyLevel.NORMAL, it)) }
     }
 
     @Test
@@ -127,6 +128,31 @@ class NotificationPrivacyPolicyTest {
         assertEquals("Atividade disponível", second.text)
     }
 
+    @Test
+    fun `backup protection notice keeps its generic explanation at every privacy level`() {
+        NotificationPrivacyLevel.entries.forEach {
+            val content = transform(it, Event.BACKUP_PROTECTION_REQUIRED)
+            assertSafe(content)
+            assertEquals("O backup precisa de uma configuração protegida", content.text)
+            assertFalse(content.toString().contains("42"))
+        }
+    }
+
+    @Test
+    fun `incoming backups hide counts even before private works exist locally`() {
+        listOf<Set<Long>?>(null, emptySet(), setOf(1L)).forEach { ids ->
+            val required = NotificationPrivacyPolicy.requiresPrivateContent(ids, emptySet(), isBackupOperation = true)
+            assertTrue(required)
+            NotificationPrivacyLevel.entries.forEach { level ->
+                val effective = NotificationPrivacyPolicy.effectiveLevel(level, required)
+                listOf(Event.BACKUP_PROGRESS, Event.RESTORE_PROGRESS, Event.RESTORE_COMPLETE).forEach { event ->
+                    assertSafe(transform(effective, event))
+                }
+            }
+        }
+        assertFalse(NotificationPrivacyPolicy.requiresPrivateContent(null, emptySet()))
+    }
+
     private fun transform(level: NotificationPrivacyLevel, event: Event) =
         NotificationPrivacyPolicy.transform(level, event, sensitive, "Pindorama!", ::resolve)
 
@@ -148,6 +174,7 @@ class NotificationPrivacyPolicyTest {
     }
 
     private fun resolve(resource: StringResource): String = when (resource) {
+        MR.strings.pindorama_backup_protection_required -> "O backup precisa de uma configuração protegida"
         MR.strings.pindorama_notification_updates -> "Há novas atualizações"
         MR.strings.pindorama_notification_downloading -> "Download em andamento"
         MR.strings.pindorama_notification_paused -> "Download pausado"
