@@ -958,4 +958,5 @@
     <string name="pindorama_show_private_content">Mostrar conteúdo privado</string>
     <string name="pindorama_hide_private_content">Ocultar conteúdo privado</string>
     <string name="pindorama_private_content_locked">O conteúdo privado está oculto. Autentique-se para continuar.</string>
+    <string name="pindorama_private_library_tab">Privadas</string>
 </resources>

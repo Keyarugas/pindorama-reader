@@ -105,10 +105,12 @@ class LibraryViewModel(
     private val selection = MutableStateFlow(emptySet</* Manga */ Long>())
 
     private val dialog = MutableStateFlow<Dialog?>(null)
+    private val privatePageSelected = MutableStateFlow(false)
 
     init {
         PrivateContentSessionManager.session.state.onEach {
             if (it != PrivateContentSessionState.UNLOCKED) {
+                privatePageSelected.value = false
                 dialog.value = null
                 selection.value = emptySet()
                 searchQuery.value = null
@@ -188,9 +190,19 @@ class LibraryViewModel(
         library,
         combine(searchQuery, selection, dialog, ::Triple),
         combine(activeCategoryIndex, displayPreferences, hasActiveFilters, ::Triple),
-    ) { library, (searchQuery, selection, dialog), (activeCategoryIndex, display, hasActiveFilters) ->
+        PrivateContentSessionManager.session.state,
+        privatePageSelected,
+    ) {
+            library,
+            (searchQuery, selection, dialog),
+            (activeCategoryIndex, display, hasActiveFilters),
+            session,
+            privatePage,
+        ->
         State(
             isLoading = library == null,
+            privateSession = session,
+            privatePageSelected = privatePage,
             searchQuery = searchQuery,
             selection = selection.intersect(library?.data?.favoritesById?.keys.orEmpty()),
             hasActiveFilters = hasActiveFilters,
@@ -637,14 +649,14 @@ class LibraryViewModel(
 
     fun getRandomLibraryItemForCurrentCategory(): LibraryItem? {
         val state = state.value
-        return state.getItemsForCategoryId(state.activeCategory?.id).randomOrNull()
+        return state.getItemsForPage(state.activePage).randomOrNull()
     }
 
     fun showSettingsDialog() {
         dialog.update { Dialog.SettingsSheet }
     }
 
-    private var lastSelectionCategory: Long? = null
+    private var lastSelectionPage: LibraryPage? = null
 
     /**
      * Reads from [selection] rather than [state], which is derived asynchronously and can still
@@ -657,16 +669,16 @@ class LibraryViewModel(
         }
 
     fun clearSelection() {
-        lastSelectionCategory = null
+        lastSelectionPage = null
         selection.update { setOf() }
     }
 
-    fun toggleSelection(category: Category, manga: LibraryManga) {
+    fun toggleSelection(page: LibraryPage, manga: LibraryManga) {
         selection.update { selection ->
             val newSelection = selection.mutate { set ->
                 if (!set.remove(manga.id)) set.add(manga.id)
             }
-            lastSelectionCategory = category.id.takeIf { newSelection.isNotEmpty() }
+            lastSelectionPage = page.takeIf { newSelection.isNotEmpty() }
             newSelection
         }
     }
@@ -675,17 +687,17 @@ class LibraryViewModel(
      * Selects all mangas between and including the given manga and the last pressed manga from the
      * same category as the given manga
      */
-    fun toggleRangeSelection(category: Category, manga: LibraryManga) {
+    fun toggleRangeSelection(page: LibraryPage, manga: LibraryManga) {
         val state = state.value
         selection.update { selection ->
             val newSelection = selection.mutate { list ->
                 val lastSelected = list.lastOrNull()
-                if (lastSelectionCategory != category.id) {
+                if (lastSelectionPage != page) {
                     list.add(manga.id)
                     return@mutate
                 }
 
-                val items = state.getItemsForCategoryId(category.id).fastMap { it.id }
+                val items = state.getItemsForPage(page).fastMap { it.id }
                 val lastMangaIndex = items.indexOf(lastSelected)
                 val curMangaIndex = items.indexOf(manga.id)
 
@@ -697,27 +709,27 @@ class LibraryViewModel(
                 }
                 selectionRange.mapNotNull { items[it] }.let(list::addAll)
             }
-            lastSelectionCategory = category.id
+            lastSelectionPage = page
             newSelection
         }
     }
 
     fun selectAll() {
-        lastSelectionCategory = null
+        lastSelectionPage = null
         val state = state.value
         selection.update { selection ->
             selection.mutate { list ->
-                state.getItemsForCategoryId(state.activeCategory?.id).map { it.id }.let(list::addAll)
+                state.getItemsForPage(state.activePage).map { it.id }.let(list::addAll)
             }
         }
     }
 
     fun invertSelection() {
-        lastSelectionCategory = null
+        lastSelectionPage = null
         val state = state.value
         selection.update { selection ->
             selection.mutate { list ->
-                val itemIds = state.getItemsForCategoryId(state.activeCategory?.id).fastMap { it.id }
+                val itemIds = state.getItemsForPage(state.activePage).fastMap { it.id }
                 val (toRemove, toAdd) = itemIds.partition { it in list }
                 list.removeAll(toRemove)
                 list.addAll(toAdd)
@@ -730,6 +742,14 @@ class LibraryViewModel(
     }
 
     fun updateActiveCategoryIndex(index: Int) {
+        val page = state.value.pages.getOrNull(index) ?: return
+        if (page == LibraryPage.Private) {
+            if (PrivateContentSessionManager.session.state.value == PrivateContentSessionState.UNLOCKED) {
+                privatePageSelected.value = true
+            }
+            return
+        }
+        privatePageSelected.value = false
         activeCategoryIndex.update { index }
         // Coerce here rather than reading it back off [state], which is derived asynchronously
         // and would still hold the previous index at this point.
@@ -813,6 +833,8 @@ class LibraryViewModel(
     data class State(
         val isInitialized: Boolean = false,
         val isLoading: Boolean = true,
+        val privateSession: PrivateContentSessionState = PrivateContentSessionState.LOCKED,
+        val privatePageSelected: Boolean = false,
         val searchQuery: String? = null,
         val selection: Set</* Manga */ Long> = setOf(),
         val hasActiveFilters: Boolean = false,
@@ -824,6 +846,7 @@ class LibraryViewModel(
         private val activeCategoryIndex: Int = 0,
         private val groupedFavorites: Map<Category, List</* LibraryItem */ Long>> = emptyMap(),
     ) {
+        val privateContentUnlocked = privateSession == PrivateContentSessionState.UNLOCKED
         val displayedCategories: List<Category> = groupedFavorites.keys.toList()
 
         val coercedActiveCategoryIndex = activeCategoryIndex.coerceIn(
@@ -831,9 +854,37 @@ class LibraryViewModel(
             maximumValue = displayedCategories.lastIndex.coerceAtLeast(0),
         )
 
-        val activeCategory: Category? = displayedCategories.getOrNull(coercedActiveCategoryIndex)
+        val pages: List<LibraryPage> = displayedCategories.map { LibraryPage.Normal(it) } +
+            if (privateContentUnlocked) listOf(LibraryPage.Private) else emptyList()
+        val activePageIndex = if (privateContentUnlocked && privatePageSelected) {
+            pages.lastIndex
+        } else {
+            coercedActiveCategoryIndex
+        }
+        val activePage: LibraryPage? = pages.getOrNull(activePageIndex)
+        val activeCategory: Category? = (activePage as? LibraryPage.Normal)?.category
+        val showPageTabs = showCategoryTabs || privateContentUnlocked
+        private val visibleFavorites = libraryData.favorites.filter {
+            privateContentUnlocked || !it.libraryManga.manga.isPrivate
+        }
+        val isLibraryEmpty = visibleFavorites.isEmpty()
 
-        val isLibraryEmpty = libraryData.favorites.isEmpty()
+        fun getItemsForPage(page: LibraryPage?): List<LibraryItem> = when (page) {
+            is LibraryPage.Normal -> getItemsForCategory(page.category)
+            LibraryPage.Private -> if (privateContentUnlocked) {
+                visibleFavorites.filter { it.libraryManga.manga.isPrivate }
+                    .distinctBy { it.id }
+                    .sortedBy { it.libraryManga.manga.title.lowercase() }
+            } else {
+                emptyList()
+            }
+            null -> emptyList()
+        }
+
+        fun getItemCountForPage(page: LibraryPage): Int? {
+            if (page !in pages || (!showMangaCount && searchQuery.isNullOrEmpty())) return null
+            return getItemsForPage(page).size
+        }
 
         val selectionMode = selection.isNotEmpty()
 
@@ -847,17 +898,22 @@ class LibraryViewModel(
 
         fun getItemsForCategory(category: Category): List<LibraryItem> {
             return groupedFavorites[category].orEmpty().mapNotNull { libraryData.favoritesById[it] }
+                .filter { privateContentUnlocked || !it.libraryManga.manga.isPrivate }
         }
 
         fun getItemCountForCategory(category: Category): Int? {
-            return if (showMangaCount || !searchQuery.isNullOrEmpty()) groupedFavorites[category]?.size else null
+            return if (showMangaCount || !searchQuery.isNullOrEmpty()) getItemsForCategory(category).size else null
         }
 
         fun getToolbarTitle(
             defaultTitle: String,
             defaultCategoryTitle: String,
             page: Int,
+            privateTitle: String,
         ): LibraryToolbarTitle {
+            if (pages.getOrNull(page) == LibraryPage.Private) {
+                return LibraryToolbarTitle(privateTitle, getItemCountForPage(LibraryPage.Private))
+            }
             val category = displayedCategories.getOrNull(page) ?: return LibraryToolbarTitle(defaultTitle)
             val categoryName = category.let {
                 if (it.isSystemCategory) defaultCategoryTitle else it.name
@@ -867,7 +923,7 @@ class LibraryViewModel(
                 !showMangaCount -> null
                 !showCategoryTabs -> getItemCountForCategory(category)
                 // Whole library count
-                else -> libraryData.favorites.size
+                else -> visibleFavorites.size
             }
             return LibraryToolbarTitle(title, count)
         }

@@ -1128,4 +1128,5 @@
     <string name="pindorama_show_private_content">Show private content</string>
     <string name="pindorama_hide_private_content">Hide private content</string>
     <string name="pindorama_private_content_locked">Private content is hidden. Authenticate to continue.</string>
+    <string name="pindorama_private_library_tab">Private</string>
 </resources>

@@ -20,7 +20,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.tachiyomi.ui.library.LibraryItem
-import tachiyomi.domain.category.model.Category
+import eu.kanade.tachiyomi.ui.library.LibraryPage
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.i18n.MR
@@ -35,12 +35,12 @@ fun LibraryPager(
     selection: Set<Long>,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
-    getCategoryForPage: (Int) -> Category,
+    getPage: (Int) -> LibraryPage?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
-    getItemsForCategory: (Category) -> List<LibraryItem>,
-    onClickManga: (Category, LibraryManga) -> Unit,
-    onLongClickManga: (Category, LibraryManga) -> Unit,
+    getItemsForPage: (LibraryPage) -> List<LibraryItem>,
+    onClickManga: (LibraryPage, LibraryManga) -> Unit,
+    onLongClickManga: (LibraryPage, LibraryManga) -> Unit,
     onClickContinueReading: ((LibraryManga) -> Unit)?,
 ) {
     HorizontalPager(
@@ -52,8 +52,8 @@ fun LibraryPager(
             // To make sure only one offscreen page is being composed
             return@HorizontalPager
         }
-        val category = getCategoryForPage(page)
-        val items = getItemsForCategory(category)
+        val category = getPage(page) ?: return@HorizontalPager
+        val items = getItemsForPage(category)
 
         if (items.isEmpty()) {
             LibraryPagerEmptyScreen(

@@ -33,7 +33,7 @@ fun LibraryToolbar(
     onClickSelectAll: () -> Unit,
     onClickInvertSelection: () -> Unit,
     onClickFilter: () -> Unit,
-    onClickRefresh: () -> Unit,
+    onClickRefresh: (() -> Unit)?,
     onClickGlobalUpdate: () -> Unit,
     onClickOpenRandomManga: () -> Unit,
     privateContentUnlocked: Boolean,
@@ -70,7 +70,7 @@ private fun LibraryRegularToolbar(
     searchQuery: String?,
     onSearchQueryChange: (String?) -> Unit,
     onClickFilter: () -> Unit,
-    onClickRefresh: () -> Unit,
+    onClickRefresh: (() -> Unit)?,
     onClickGlobalUpdate: () -> Unit,
     onClickOpenRandomManga: () -> Unit,
     privateContentUnlocked: Boolean,
@@ -101,7 +101,7 @@ private fun LibraryRegularToolbar(
         actions = {
             val filterTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current
             AppBarActions(
-                listOf(
+                listOfNotNull(
                     AppBar.Action(
                         title = stringResource(MR.strings.action_filter),
                         icon = MaterialSymbols.Rounded.FilterList,
@@ -112,10 +112,12 @@ private fun LibraryRegularToolbar(
                         title = stringResource(MR.strings.action_update_library),
                         onClick = onClickGlobalUpdate,
                     ),
-                    AppBar.OverflowAction(
-                        title = stringResource(MR.strings.action_update_category),
-                        onClick = onClickRefresh,
-                    ),
+                    onClickRefresh?.let {
+                        AppBar.OverflowAction(
+                            title = stringResource(MR.strings.action_update_category),
+                            onClick = it,
+                        )
+                    },
                     AppBar.OverflowAction(
                         title = stringResource(
                             if (privateContentUnlocked) {
@@ -148,7 +150,7 @@ private fun LibrarySelectionToolbar(
         titleContent = { Text(text = "$selectedCount") },
         actions = {
             AppBarActions(
-                listOf(
+                listOfNotNull(
                     AppBar.Action(
                         title = stringResource(MR.strings.action_select_all),
                         icon = MaterialSymbols.Rounded.SelectAll,
