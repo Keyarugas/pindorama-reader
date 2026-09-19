@@ -129,6 +129,12 @@ private fun Context.notificationEvent(notification: Notification): Event {
     }
 }
 
+/** Fixed explanation: no content classification details are attached. */
+fun NotificationCompat.Builder.setBackupProtectionRequired(): NotificationCompat.Builder = apply {
+    extras.putString(PRIVACY_EVENT, Event.BACKUP_PROTECTION_REQUIRED.name)
+    extras.putBoolean(PRIVATE_CONTENT, true)
+}
+
 private const val PRIVACY_EVENT = "pindorama.notification.privacy.event"
 
 /** Attach only technical IDs, before build() applies the presentation policy. */
@@ -145,7 +151,14 @@ fun NotificationCompat.Builder.setMangaPrivacyIds(ids: List<Long>?): Notificatio
 private fun Context.requiresPrivateContent(notification: Notification): Boolean {
     val ids = notification.extras?.getLongArray(MANGA_IDS)
     val privateIds = appGraph.privateContentVisibility.privateIds.value
-    if (ids != null) return NotificationPrivacyPolicy.requiresPrivateContent(ids.toSet(), privateIds)
+    // An incoming backup can contain private works absent from the local classification.
+    val isBackupOperation = notification.channelId in setOf(
+        Notifications.CHANNEL_BACKUP_RESTORE_PROGRESS,
+        Notifications.CHANNEL_BACKUP_RESTORE_COMPLETE,
+    )
+    if (ids != null || isBackupOperation) {
+        return NotificationPrivacyPolicy.requiresPrivateContent(ids?.toSet(), privateIds, isBackupOperation)
+    }
     // Old notifications and producers without an originating manga cannot safely prove public content.
     val mayContainManga = notification.channelId in setOf(
         Notifications.CHANNEL_LIBRARY_PROGRESS,

@@ -7,6 +7,8 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import eu.kanade.tachiyomi.data.backup.BackupDecoder
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
+import eu.kanade.tachiyomi.data.backup.BackupOperation
+import eu.kanade.tachiyomi.data.backup.backupDiagnostic
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionStore
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
@@ -17,17 +19,14 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import eu.kanade.tachiyomi.data.download.DownloadCache
-import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import logcat.LogPriority
-import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.Database
-import tachiyomi.i18n.MR
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -61,11 +60,6 @@ class BackupRestorer(
     private val restoreProgress = AtomicInt(0)
     private val errors = CopyOnWriteArrayList<Pair<Date, String>>()
 
-    /**
-     * Mapping of source ID to source name from backup data
-     */
-    private var sourceMapping: Map<Long, String> = emptyMap()
-
     suspend fun restore(uri: Uri, options: RestoreOptions) {
         val startTime = System.currentTimeMillis()
 
@@ -76,7 +70,7 @@ class BackupRestorer(
             try {
                 downloadCache.invalidateCache()
             } catch (e: Exception) {
-                logcat(LogPriority.ERROR, e) { "Failed to invalidate download cache after restore" }
+                logcat(LogPriority.ERROR) { backupDiagnostic(BackupOperation.INVALIDATE_CACHE, e) }
             }
         }
 
@@ -95,10 +89,6 @@ class BackupRestorer(
 
     private suspend fun restoreFromFile(uri: Uri, options: RestoreOptions) {
         val backup = backupDecoder.decode(uri)
-
-        // Store source mapping for error messages
-        val backupMaps = backup.backupSources
-        sourceMapping = backupMaps.associate { it.sourceId to it.name }
 
         if (options.libraryEntries) {
             restoreAmount += backup.backupManga.size
@@ -153,7 +143,6 @@ class BackupRestorer(
 
         val progress = restoreProgress.incrementAndFetch()
         notifier.showRestoreProgress(
-            context.stringResource(MR.strings.categories),
             progress,
             restoreAmount,
             isSync,
@@ -179,7 +168,7 @@ class BackupRestorer(
                     true
                 } catch (e: Exception) {
                     ensureActive()
-                    logcat(LogPriority.WARN, e) { "Batch restore failed, retrying entry by entry" }
+                    logcat(LogPriority.WARN) { backupDiagnostic(BackupOperation.RESTORE_BATCH, e) }
                     false
                 }
 
@@ -193,15 +182,18 @@ class BackupRestorer(
                             mangaRestorer.restore(it, backupCategories)
                         } catch (e: Exception) {
                             ensureActive()
-                            val sourceName = sourceMapping[it.source] ?: it.source.toString()
-                            errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
+                            errors.add(Date() to backupDiagnostic(BackupOperation.RESTORE_ENTRY, e))
                         }
 
                         restoreProgress.incrementAndFetch()
                     }
                 }
 
-                notifier.showRestoreProgress(chunk.last().title, restoreProgress.load(), restoreAmount, isSync)
+                notifier.showRestoreProgress(
+                    progress = restoreProgress.load(),
+                    maxAmount = restoreAmount,
+                    sync = isSync,
+                )
             }
     }
 
@@ -219,7 +211,6 @@ class BackupRestorer(
 
         val progress = restoreProgress.incrementAndFetch()
         notifier.showRestoreProgress(
-            context.stringResource(MR.strings.app_settings),
             progress,
             restoreAmount,
             isSync,
@@ -232,7 +223,6 @@ class BackupRestorer(
 
         val progress = restoreProgress.incrementAndFetch()
         notifier.showRestoreProgress(
-            context.stringResource(MR.strings.source_settings),
             progress,
             restoreAmount,
             isSync,
@@ -252,14 +242,14 @@ class BackupRestorer(
                         try {
                             extensionStoreRestorer(it)
                         } catch (e: Exception) {
-                            errors.add(Date() to "Error Adding Repo: ${it.name} : ${e.message}")
+                            ensureActive()
+                            errors.add(Date() to backupDiagnostic(BackupOperation.RESTORE_REPOSITORY, e))
                         }
 
                         restoreProgress.incrementAndFetch()
                     }
                 }
                 notifier.showRestoreProgress(
-                    context.stringResource(MR.strings.extensionStores),
                     restoreProgress.load(),
                     restoreAmount,
                     isSync,
@@ -270,10 +260,11 @@ class BackupRestorer(
     private fun writeErrorLog(): File {
         try {
             if (errors.isNotEmpty()) {
-                val file = context.createFileInCacheDir("mihon_restore_error.txt")
+                val file = File(context.cacheDir, "pindorama_restore_error.txt")
                 val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
                 file.bufferedWriter().use { out ->
+                    out.write("Restore diagnostics: failed operations and error codes only.\n")
                     errors.forEach { (date, message) ->
                         out.write("[${sdf.format(date)}] $message\n")
                     }

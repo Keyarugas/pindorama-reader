@@ -17,13 +17,17 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.hippo.unifile.UniFile
 import dev.zacsweers.metro.Inject
+import eu.kanade.tachiyomi.data.backup.BackupError
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
+import eu.kanade.tachiyomi.data.backup.BackupOperation
+import eu.kanade.tachiyomi.data.backup.backupDiagnostic
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.isRunning
 import eu.kanade.tachiyomi.util.system.setForegroundSafely
 import eu.kanade.tachiyomi.util.system.workManager
+import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
 import mihon.app.di.AppGraph
 import mihon.app.di.appGraph
@@ -68,8 +72,10 @@ class BackupCreateJob(private val context: Context, workerParams: WorkerParamete
             }
             Result.success()
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e)
-            if (!isAutoBackup) notifier.showBackupError(e.message)
+            if (e is CancellationException) throw e
+            val error = BackupError.from(e)
+            logcat(LogPriority.ERROR) { backupDiagnostic(BackupOperation.CREATE, e) }
+            if (!isAutoBackup || error == BackupError.PROTECTION_REQUIRED) notifier.showBackupError(error)
             Result.failure()
         } finally {
             context.cancelNotification(Notifications.ID_BACKUP_PROGRESS)
