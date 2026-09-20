@@ -307,6 +307,9 @@ dependencies {
     implementation(libs.okio)
     implementation(libs.conscrypt) // TLS 1.3 support for Android < 10
 
+    // Isolated backup crypto: lightweight Argon2id API, no global provider registration.
+    implementation(libs.bouncycastle)
+
     // Data serialization (JSON, protobuf, xml)
     implementation(libs.bundles.serialization)
 
