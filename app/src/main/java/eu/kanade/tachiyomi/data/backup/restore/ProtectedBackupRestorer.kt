@@ -6,13 +6,15 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.CategoriesRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import tachiyomi.data.Database
 
-/** Sequential and fail-fast. Completed entry transactions may remain after cancellation/failure. */
+/** One database transaction; preferences remain a separate, post-commit phase. */
 @Inject
 class ProtectedBackupRestorer(
     private val categories: CategoriesRestorer,
     private val manga: MangaRestorer,
     private val preferences: ProtectedRestorePreferences,
+    private val database: Database,
 ) {
     internal suspend fun restore(
         prepared: PreparedProtectedRestore,
@@ -21,11 +23,14 @@ class ProtectedBackupRestorer(
         val backup = prepared.backup
         ProtectedRestorePreferences.validate(backup.backupPreferences)
         currentCoroutineContext().ensureActive()
-        if (options.categories) categories.restoreData(backup.backupCategories)
-        if (options.libraryEntries) {
-            backup.backupManga.forEach {
+        database.transaction {
+            if (options.categories) categories.restoreData(backup.backupCategories)
+            if (options.libraryEntries) {
+                backup.backupManga.forEach {
+                    currentCoroutineContext().ensureActive()
+                    manga.restoreProtected(it, if (options.categories) backup.backupCategories else emptyList())
+                }
                 currentCoroutineContext().ensureActive()
-                manga.restoreProtected(it, if (options.categories) backup.backupCategories else emptyList())
             }
             currentCoroutineContext().ensureActive()
         }

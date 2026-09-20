@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.backup
 
 import android.content.SharedPreferences
+import app.cash.sqldelight.SuspendingTransactionWithoutReturn
 import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.create.ProtectedBackupPayload
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.assertThrows
 import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.data.Database
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -66,8 +68,13 @@ class ProtectedBackupRestoreTest {
         val categories = mockk<CategoriesRestorer>(relaxed = true)
         val manga = mockk<MangaRestorer>()
         val preferences = ProtectedRestorePreferences(store)
-        val restorer = ProtectedBackupRestorer(categories, manga, preferences)
+        val database = mockk<Database>()
+        val restorer = ProtectedBackupRestorer(categories, manga, preferences, database)
         init {
+            // Control-flow tests only. Actual rollback is verified with SQLite in ProtectedRestoreDatabaseTest.
+            coEvery { database.transaction(any(), any()) } coAnswers {
+                secondArg<suspend SuspendingTransactionWithoutReturn.() -> Unit>().invoke(mockk(relaxed = true))
+            }
             coEvery { manga.restoreProtected(any(), any()) } answers { entries += firstArg<BackupManga>() }
         }
         suspend fun restore(file: ByteArray, password: CharArray) {
@@ -254,7 +261,7 @@ class ProtectedBackupRestoreTest {
     }
 
     @Test
-    fun `failure during application stops before preferences and leaves only prior completed entries`() = runTest {
+    fun `simulated transaction verifies fail fast control flow before preferences`() = runTest {
         val target = Target()
         val data = backup().copy(backupManga = listOf(BackupManga(1, "/first"), BackupManga(1, "/second")))
         coEvery { target.manga.restoreProtected(match { it.url == "/second" }, any()) } throws
@@ -280,7 +287,7 @@ class ProtectedBackupRestoreTest {
     }
 
     @Test
-    fun `cancel during preference phase retains only previously applied visual choice`() = runTest {
+    fun `cancel during preference phase removes previously absent visual choice`() = runTest {
         val backing = testPreferenceStore()
         val file = encrypted(
             backup().apply {
@@ -306,13 +313,67 @@ class ProtectedBackupRestoreTest {
             Target(store).restore(file, password)
         }
         assertThrows<CancellationException> { task.await() }
+        assertFalse(backing.getBoolean("display_unread_badge").isSet())
+        assertFalse(backing.getBoolean("display_local_badge").isSet())
+    }
+
+    @Test
+    fun `preference failure restores previous value and removes new key`() = runTest {
+        val backing = testPreferenceStore()
+        backing.getBoolean("display_unread_badge").set(false)
+        val store = object : PreferenceStore by backing {
+            override fun getBoolean(key: String, defaultValue: Boolean): Preference<Boolean> {
+                val preference = backing.getBoolean(key, defaultValue)
+                return object : Preference<Boolean> by preference {
+                    override fun set(value: Boolean) {
+                        preference.set(value)
+                        if (key == "display_local_badge") throw IOException("synthetic")
+                    }
+                }
+            }
+        }
+        val data = backup().apply {
+            backupPreferences = listOf(
+                BackupPreference("display_unread_badge", BooleanPreferenceValue(true)),
+                BackupPreference("display_local_badge", BooleanPreferenceValue(false)),
+            )
+        }
+        assertThrows<BackupException> { Target(store).restore(encrypted(data), password) }
+        assertFalse(backing.getBoolean("display_unread_badge").get())
         assertTrue(backing.getBoolean("display_unread_badge").isSet())
         assertFalse(backing.getBoolean("display_local_badge").isSet())
     }
 
     @Test
+    fun `failed preference recovery exposes fixed code without hiding partial state`() = runTest {
+        val backing = testPreferenceStore()
+        backing.getBoolean("display_unread_badge").set(false)
+        val store = object : PreferenceStore by backing {
+            override fun getBoolean(key: String, defaultValue: Boolean): Preference<Boolean> {
+                val preference = backing.getBoolean(key, defaultValue)
+                return object : Preference<Boolean> by preference {
+                    override fun set(value: Boolean) {
+                        if (!value) throw IOException("private synthetic rollback failure")
+                        preference.set(value)
+                        throw IOException("private synthetic application failure")
+                    }
+                }
+            }
+        }
+        val data = backup().apply {
+            backupPreferences = listOf(BackupPreference("display_unread_badge", BooleanPreferenceValue(true)))
+        }
+        val error = assertThrows<BackupException> { Target(store).restore(encrypted(data), password) }
+        assertEquals(BackupError.PREFERENCE_RECOVERY_FAILED, error.error)
+        assertNull(error.cause)
+        assertTrue(backing.getBoolean("display_unread_badge").get())
+    }
+
+    @Test
     fun `preference write failure is surfaced without claiming full restoration`() = runTest {
         val store = mockk<PreferenceStore>()
+        every { store.getAll() } returns emptyMap<String, Any>()
+        every { store.getBoolean(any(), any()).isSet() } returns false
         every { store.getBoolean(any(), any()).set(any()) } throws IOException("private preference details")
         val target = Target(store)
         val error = assertThrows<BackupException> { target.restore(encrypted(backup()), password) }
@@ -332,6 +393,10 @@ private fun testPreferenceStore(): PreferenceStore {
     every { shared.getBoolean(any(), any()) } answers { values[firstArg<String>()] as? Boolean ?: secondArg() }
     every { shared.getInt(any(), any()) } answers { values[firstArg<String>()] as? Int ?: secondArg() }
     every { shared.getString(any(), any()) } answers { values[firstArg<String>()] as? String ?: secondArg() }
+    every { editor.remove(any()) } answers {
+        values.remove(firstArg<String>())
+        editor
+    }
     every { editor.putBoolean(any(), any()) } answers {
         values[firstArg()] = secondArg<Boolean>()
         editor

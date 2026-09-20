@@ -5,8 +5,10 @@ import eu.kanade.tachiyomi.data.backup.BackupError
 import eu.kanade.tachiyomi.data.backup.BackupException
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BooleanPreferenceValue
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import tachiyomi.core.common.preference.PreferenceStore
 
 /** Deny by default, including unknown future keys. No source preferences or scheduling side effects. */
@@ -14,11 +16,42 @@ import tachiyomi.core.common.preference.PreferenceStore
 class ProtectedRestorePreferences(private val store: PreferenceStore) {
     internal suspend fun apply(preferences: List<BackupPreference>) {
         validate(preferences)
-        preferences.filter { it.key in allowedBooleans }.forEach {
-            currentCoroutineContext().ensureActive()
-            store.getBoolean(it.key).set((it.value as BooleanPreferenceValue).value)
+        val selected = preferences.filter { it.key in allowedBooleans }
+        val local = store.getAll()
+        val before = selected.associate { preference ->
+            val old = local[preference.key]
+            if (old != null && old !is Boolean) throw BackupException(BackupError.INVALID_FILE)
+            preference.key to (old as Boolean?)
         }
-        currentCoroutineContext().ensureActive()
+        val attempted = mutableListOf<BackupPreference>()
+        try {
+            selected.forEach {
+                currentCoroutineContext().ensureActive()
+                attempted += it // Include writes that modify state and then throw.
+                store.getBoolean(it.key).set((it.value as BooleanPreferenceValue).value)
+            }
+            currentCoroutineContext().ensureActive()
+        } catch (error: Exception) {
+            val recovered = withContext(NonCancellable) {
+                var success = true
+                attempted.asReversed().forEach {
+                    try {
+                        val preference = store.getBoolean(it.key)
+                        val imported = (it.value as BooleanPreferenceValue).value
+                        // Avoid overwriting an observable newer local choice. This is not an atomic CAS.
+                        if (preference.isSet() && preference.get() == imported) {
+                            val old = before[it.key]
+                            if (old == null) preference.delete() else preference.set(old)
+                        }
+                    } catch (_: Exception) {
+                        success = false
+                    }
+                }
+                success
+            }
+            if (!recovered) throw BackupException(BackupError.PREFERENCE_RECOVERY_FAILED)
+            throw error
+        }
         // Scheduling and security keys never change: do not call setupTask or launch network operations.
     }
 
