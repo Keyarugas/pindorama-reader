@@ -33,6 +33,7 @@ composeMaterialMotion = "2.0.1"
 composeRichEditor = "1.2.0"
 composeWebview = "0.33.6"
 conscrypt = "2.7.0"
+bouncycastle = "1.86"
 directionalViewPager = "1.0.0"
 diskLruCache = "2.0.2"
 firebase-bom = "34.19.0"
@@ -79,6 +80,7 @@ webgpuviewer = "40"
 xmlutil = "1.0.2"
 
 [libraries]
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk15to18", version.ref = "bouncycastle" }
 aboutLibraries-compose = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "aboutLibraries" }
 android-desugar = { module = "com.android.tools:desugar_jdk_libs", version.ref = "android-desugar" }
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }

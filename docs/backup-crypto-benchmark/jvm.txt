@@ -1,0 +1,79 @@
+RUN heap=1024 payload=0
+payloadMiB=0 maxHeapMiB=1024 provider=SunJCE
+kdf ms=353.97 baselineMiB=3.59 sampledPeakMiB=83.81 additionalMiB=80.23
+aesEncrypt ms=10.05 baselineMiB=6.63 sampledPeakMiB=7.13 additionalMiB=0.50
+aesDecrypt ms=0.86 baselineMiB=6.63 sampledPeakMiB=6.75 additionalMiB=0.12
+engineEncrypt ms=202.85 baselineMiB=6.63 sampledPeakMiB=75.88 additionalMiB=69.25
+engineDecrypt ms=184.02 baselineMiB=6.64 sampledPeakMiB=75.14 additionalMiB=68.50
+referenceFixture=PASS invalidTag=REJECTED
+result=PASS
+VmHWM:	  281180 kB
+VmRSS:	  281180 kB
+exit=0
+RUN heap=1024 payload=1
+payloadMiB=1 maxHeapMiB=1024 provider=SunJCE
+kdf ms=333.98 baselineMiB=5.59 sampledPeakMiB=84.87 additionalMiB=79.29
+aesEncrypt ms=33.89 baselineMiB=8.63 sampledPeakMiB=11.13 additionalMiB=2.50
+aesDecrypt ms=14.75 baselineMiB=10.63 sampledPeakMiB=12.83 additionalMiB=2.19
+engineEncrypt ms=221.39 baselineMiB=8.63 sampledPeakMiB=82.77 additionalMiB=74.14
+engineDecrypt ms=208.57 baselineMiB=10.64 sampledPeakMiB=85.81 additionalMiB=75.17
+result=PASS
+VmHWM:	  196924 kB
+VmRSS:	  196924 kB
+exit=0
+RUN heap=1024 payload=8
+payloadMiB=8 maxHeapMiB=1024 provider=SunJCE
+kdf ms=363.88 baselineMiB=12.59 sampledPeakMiB=85.13 additionalMiB=72.54
+aesEncrypt ms=114.15 baselineMiB=15.63 sampledPeakMiB=25.12 additionalMiB=9.50
+aesDecrypt ms=97.34 baselineMiB=24.63 sampledPeakMiB=34.60 additionalMiB=9.97
+engineEncrypt ms=294.22 baselineMiB=15.63 sampledPeakMiB=111.13 additionalMiB=95.50
+engineDecrypt ms=276.34 baselineMiB=24.64 sampledPeakMiB=112.34 additionalMiB=87.70
+result=PASS
+VmHWM:	  201160 kB
+VmRSS:	  190464 kB
+exit=0
+RUN heap=1024 payload=32
+payloadMiB=32 maxHeapMiB=1024 provider=SunJCE
+kdf ms=367.50 baselineMiB=36.59 sampledPeakMiB=108.13 additionalMiB=71.54
+aesEncrypt ms=382.21 baselineMiB=39.63 sampledPeakMiB=74.13 additionalMiB=34.50
+aesDecrypt ms=367.05 baselineMiB=72.64 sampledPeakMiB=106.67 additionalMiB=34.03
+engineEncrypt ms=597.44 baselineMiB=39.64 sampledPeakMiB=206.98 additionalMiB=167.34
+engineDecrypt ms=569.43 baselineMiB=72.64 sampledPeakMiB=208.54 additionalMiB=135.90
+result=PASS
+VmHWM:	  345336 kB
+VmRSS:	  345336 kB
+exit=0
+RUN heap=1024 payload=64
+payloadMiB=64 maxHeapMiB=1024 provider=SunJCE
+kdf ms=329.67 baselineMiB=68.59 sampledPeakMiB=139.15 additionalMiB=70.57
+aesEncrypt ms=776.95 baselineMiB=71.63 sampledPeakMiB=138.09 additionalMiB=66.46
+aesDecrypt ms=747.24 baselineMiB=136.63 sampledPeakMiB=202.25 additionalMiB=65.62
+engineEncrypt ms=948.05 baselineMiB=71.63 sampledPeakMiB=267.15 additionalMiB=195.51
+engineDecrypt ms=1003.95 baselineMiB=136.64 sampledPeakMiB=376.64 additionalMiB=240.00
+result=PASS
+VmHWM:	  564424 kB
+VmRSS:	  564424 kB
+exit=0
+RUN heap=1024 payload=128
+payloadMiB=128 maxHeapMiB=1024 provider=SunJCE
+kdf ms=347.34 baselineMiB=132.62 sampledPeakMiB=205.60 additionalMiB=72.97
+aesEncrypt ms=1557.02 baselineMiB=135.63 sampledPeakMiB=266.27 additionalMiB=130.64
+aesDecrypt ms=1554.90 baselineMiB=264.63 sampledPeakMiB=394.34 additionalMiB=129.71
+engineEncrypt ms=1788.36 baselineMiB=135.63 sampledPeakMiB=523.15 additionalMiB=387.52
+engineDecrypt ms=1770.77 baselineMiB=264.64 sampledPeakMiB=719.16 additionalMiB=454.52
+result=PASS
+VmHWM:	  956544 kB
+VmRSS:	  956544 kB
+exit=0
+RUN heap=128 payload=0
+payloadMiB=0 maxHeapMiB=128 provider=SunJCE
+result=INSUFFICIENT_RESOURCES
+VmHWM:	   51960 kB
+VmRSS:	   51960 kB
+exit=0
+RUN heap=256 payload=32
+payloadMiB=32 maxHeapMiB=256 provider=SunJCE
+result=INSUFFICIENT_RESOURCES
+VmHWM:	   85744 kB
+VmRSS:	   85744 kB
+exit=0

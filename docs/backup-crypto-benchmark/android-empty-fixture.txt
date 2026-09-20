@@ -1,0 +1,10 @@
+payloadMiB=0 maxHeapMiB=512 provider=AndroidOpenSSL
+kdf ms=608.10 baselineMiB=0.52 sampledPeakMiB=67.13 additionalMiB=66.61
+aesEncrypt ms=2.37 baselineMiB=1.51 sampledPeakMiB=1.57 additionalMiB=0.06
+aesDecrypt ms=1.64 baselineMiB=1.51 sampledPeakMiB=1.54 additionalMiB=0.03
+engineEncrypt ms=528.79 baselineMiB=1.51 sampledPeakMiB=68.09 additionalMiB=66.58
+engineDecrypt ms=535.01 baselineMiB=1.51 sampledPeakMiB=68.13 additionalMiB=66.62
+referenceFixture=PASS invalidTag=REJECTED
+result=PASS
+VmHWM:	  276628 kB
+VmRSS:	  263968 kB

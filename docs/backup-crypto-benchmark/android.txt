@@ -1,0 +1,83 @@
+RUN heap=256 payload=0
+payloadMiB=0 maxHeapMiB=256 provider=AndroidOpenSSL
+kdf ms=610.56 baselineMiB=0.48 sampledPeakMiB=67.15 additionalMiB=66.66
+aesEncrypt ms=1.75 baselineMiB=1.48 sampledPeakMiB=1.54 additionalMiB=0.06
+aesDecrypt ms=1.01 baselineMiB=1.51 sampledPeakMiB=1.54 additionalMiB=0.03
+engineEncrypt ms=536.32 baselineMiB=1.51 sampledPeakMiB=68.09 additionalMiB=66.59
+engineDecrypt ms=575.40 baselineMiB=1.48 sampledPeakMiB=68.13 additionalMiB=66.66
+result=INSUFFICIENT_RESOURCES
+VmHWM:	  264784 kB
+VmRSS:	  264784 kB
+exit=0
+RUN heap=256 payload=1
+payloadMiB=1 maxHeapMiB=256 provider=AndroidOpenSSL
+kdf ms=605.12 baselineMiB=1.52 sampledPeakMiB=68.13 additionalMiB=66.61
+aesEncrypt ms=3.06 baselineMiB=2.48 sampledPeakMiB=3.55 additionalMiB=1.07
+aesDecrypt ms=2.82 baselineMiB=3.52 sampledPeakMiB=4.58 additionalMiB=1.07
+engineEncrypt ms=529.79 baselineMiB=2.51 sampledPeakMiB=72.09 additionalMiB=69.58
+engineDecrypt ms=580.69 baselineMiB=3.48 sampledPeakMiB=72.19 additionalMiB=68.71
+result=PASS
+VmHWM:	  216892 kB
+VmRSS:	  200384 kB
+exit=0
+RUN heap=256 payload=8
+payloadMiB=8 maxHeapMiB=256 provider=AndroidOpenSSL
+kdf ms=599.06 baselineMiB=8.52 sampledPeakMiB=75.13 additionalMiB=66.61
+aesEncrypt ms=11.13 baselineMiB=9.48 sampledPeakMiB=17.55 additionalMiB=8.07
+aesDecrypt ms=10.58 baselineMiB=17.52 sampledPeakMiB=25.58 additionalMiB=8.07
+engineEncrypt ms=548.61 baselineMiB=9.51 sampledPeakMiB=100.11 additionalMiB=90.59
+engineDecrypt ms=657.69 baselineMiB=17.48 sampledPeakMiB=102.28 additionalMiB=84.79
+result=PASS
+VmHWM:	  243116 kB
+VmRSS:	  228716 kB
+exit=0
+RUN heap=256 payload=16
+payloadMiB=16 maxHeapMiB=256 provider=AndroidOpenSSL
+kdf ms=610.53 baselineMiB=16.52 sampledPeakMiB=83.21 additionalMiB=66.69
+aesEncrypt ms=20.18 baselineMiB=17.48 sampledPeakMiB=33.55 additionalMiB=16.07
+aesDecrypt ms=20.36 baselineMiB=33.52 sampledPeakMiB=49.58 additionalMiB=16.07
+engineEncrypt ms=565.62 baselineMiB=17.51 sampledPeakMiB=132.12 additionalMiB=114.61
+engineDecrypt ms=613.76 baselineMiB=33.48 sampledPeakMiB=136.28 additionalMiB=102.79
+result=PASS
+VmHWM:	  280808 kB
+VmRSS:	  261488 kB
+exit=0
+RUN heap=256 payload=32
+payloadMiB=32 maxHeapMiB=256 provider=AndroidOpenSSL
+result=INSUFFICIENT_RESOURCES
+VmHWM:	  154256 kB
+VmRSS:	  154256 kB
+exit=0
+RUN heap=512 payload=32
+payloadMiB=32 maxHeapMiB=512 provider=AndroidOpenSSL
+kdf ms=612.98 baselineMiB=32.52 sampledPeakMiB=99.27 additionalMiB=66.75
+aesEncrypt ms=38.93 baselineMiB=33.52 sampledPeakMiB=65.58 additionalMiB=32.07
+aesDecrypt ms=38.62 baselineMiB=65.52 sampledPeakMiB=97.58 additionalMiB=32.07
+engineEncrypt ms=605.69 baselineMiB=33.51 sampledPeakMiB=196.06 additionalMiB=162.55
+engineDecrypt ms=665.93 baselineMiB=65.48 sampledPeakMiB=203.00 additionalMiB=137.51
+result=PASS
+VmHWM:	  348840 kB
+VmRSS:	  327548 kB
+exit=0
+RUN heap=512 payload=64
+payloadMiB=64 maxHeapMiB=512 provider=AndroidOpenSSL
+kdf ms=601.90 baselineMiB=64.52 sampledPeakMiB=131.27 additionalMiB=66.75
+aesEncrypt ms=80.36 baselineMiB=65.52 sampledPeakMiB=129.58 additionalMiB=64.07
+aesDecrypt ms=75.96 baselineMiB=129.52 sampledPeakMiB=193.58 additionalMiB=64.07
+engineEncrypt ms=723.39 baselineMiB=65.51 sampledPeakMiB=324.12 additionalMiB=258.61
+result=INSUFFICIENT_RESOURCES
+VmHWM:	  468240 kB
+VmRSS:	  257484 kB
+exit=0
+RUN heap=512 payload=128
+payloadMiB=128 maxHeapMiB=512 provider=AndroidOpenSSL
+result=INSUFFICIENT_RESOURCES
+VmHWM:	  253256 kB
+VmRSS:	  252412 kB
+exit=0
+RUN heap=128 payload=0
+payloadMiB=0 maxHeapMiB=128 provider=AndroidOpenSSL
+result=INSUFFICIENT_RESOURCES
+VmHWM:	  121788 kB
+VmRSS:	  120512 kB
+exit=0
