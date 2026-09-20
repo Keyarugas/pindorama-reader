@@ -375,6 +375,7 @@ dependencies {
     implementation(libs.leakCanary.plumber)
 
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.sqldelight.jdbc.test)
 }
 
 androidComponents {

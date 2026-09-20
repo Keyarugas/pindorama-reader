@@ -969,12 +969,19 @@
 
     <!-- Pindorama experimental protected manual backup -->
     <string name="pindorama_backup_protected_option">Backup protegido (.pindobk) — experimental</string>
-    <string name="pindorama_backup_protected_experimental">Experimental: este aplicativo ainda não restaura arquivos .pindobk. Não use este arquivo como sua única cópia. O recurso ainda não está pronto para distribuição pública.</string>
+    <string name="pindorama_backup_protected_experimental">Experimental: a criação e a restauração protegidas são experimentais. Não use este arquivo como sua única cópia. O recurso ainda não está pronto para distribuição pública.</string>
     <string name="pindorama_backup_password_warning">Escolha uma senha forte e exclusiva e guarde-a em segurança. Ela será necessária para restaurar este arquivo, inclusive em outro dispositivo. Uma senha esquecida não pode ser recuperada. O aplicativo não a armazena.</string>
     <string name="pindorama_backup_password_confirm">Confirme a senha do backup</string>
     <string name="pindorama_backup_password_mismatch">As senhas não coincidem.</string>
     <string name="pindorama_backup_password_invalid">Informe e confirme uma senha válida (até 1.024 caracteres). Se a tela foi fechada, informe-a novamente.</string>
     <string name="pindorama_backup_memory_insufficient">Memória insuficiente para criar este backup protegido. Nada foi exportado como backup convencional. Tente novamente após encerrar outras operações ou use um dispositivo com mais memória disponível.</string>
-    <string name="pindorama_backup_protected_complete">Arquivo protegido gravado e verificado. A restauração de .pindobk ainda não está disponível neste aplicativo. Guarde a senha e outras cópias válidas.</string>
+    <string name="pindorama_backup_protected_complete">Arquivo protegido gravado e verificado. A restauração protegida é experimental. Guarde a senha e outras cópias válidas.</string>
     <string name="pindorama_backup_creation_cancelled">Criação de backup cancelada. Um arquivo protegido parcial pode permanecer se o provedor não conseguir removê-lo.</string>
+    <string name="pindorama_restore_format">Formato de backup protegido incompatível ou inválido. Nenhum dado foi importado.</string>
+    <string name="pindorama_restore_authentication_failed">Senha incorreta ou backup protegido danificado. Nenhum dado foi importado.</string>
+    <string name="pindorama_restore_policy">Restauração experimental. Segurança, credenciais, configurações de fontes, repositórios e tarefas automáticas permanecem locais. Apenas preferências visuais selecionadas são importadas. Interrupções durante a aplicação podem deixar alterações parciais. Mantenha outras cópias válidas.</string>
+    <string name="pindorama_restore_password">Digite a senha do backup. Ela é independente do bloqueio do aplicativo e da biometria. A senha não será armazenada. A autenticação e a validação devem terminar antes da seleção das opções de restauração.</string>
+    <string name="pindorama_restore_working">Processando backup. Mantenha esta tela aberta.</string>
+    <string name="pindorama_restore_complete">Dados selecionados e suportados restaurados. Configurações locais de segurança e tarefas automáticas foram preservadas.</string>
+    <string name="pindorama_restore_partial">A restauração não terminou. Obras ou preferências visuais já aplicadas podem permanecer. Nenhuma tarefa automática foi configurada por esta importação.</string>
 </resources>

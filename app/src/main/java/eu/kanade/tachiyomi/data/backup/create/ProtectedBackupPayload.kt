@@ -113,6 +113,10 @@ internal suspend fun <T> protectedBackupOperation(block: suspend () -> T): T {
                 BackupCryptoError.INSUFFICIENT_RESOURCES -> BackupError.INSUFFICIENT_RESOURCES
                 BackupCryptoError.SIZE_LIMIT -> BackupError.READ_LIMIT
                 BackupCryptoError.INVALID_PASSWORD_ENCODING -> BackupError.INVALID_PASSWORD
+                BackupCryptoError.AUTHENTICATION_FAILED -> BackupError.AUTHENTICATION_FAILED
+                BackupCryptoError.UNSUPPORTED_VERSION, BackupCryptoError.UNSUPPORTED_ALGORITHM,
+                BackupCryptoError.UNSUPPORTED_PARAMETERS, BackupCryptoError.INVALID_FORMAT,
+                -> BackupError.PROTECTED_FORMAT
                 BackupCryptoError.BUSY -> BackupError.BUSY
                 else -> BackupError.UNKNOWN
             },

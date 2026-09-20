@@ -13,6 +13,8 @@ enum class BackupError(val messageRes: StringResource) {
     INVALID_PASSWORD(MR.strings.pindorama_backup_password_invalid),
     PASSWORD_MISMATCH(MR.strings.pindorama_backup_password_mismatch),
     BUSY(MR.strings.backup_in_progress),
+    PROTECTED_FORMAT(MR.strings.pindorama_restore_format),
+    AUTHENTICATION_FAILED(MR.strings.pindorama_restore_authentication_failed),
     INVALID_FILE(MR.strings.pindorama_backup_invalid),
     READ_LIMIT(MR.strings.pindorama_backup_read_limit),
     IO(MR.strings.pindorama_backup_io_error),

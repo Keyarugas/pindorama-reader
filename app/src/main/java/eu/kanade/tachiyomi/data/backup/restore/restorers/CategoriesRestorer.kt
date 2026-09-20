@@ -14,6 +14,14 @@ class CategoriesRestorer(
 ) {
 
     suspend operator fun invoke(backupCategories: List<BackupCategory>) {
+        restoreCategories(backupCategories, updateDisplay = true)
+    }
+
+    suspend fun restoreData(backupCategories: List<BackupCategory>) {
+        restoreCategories(backupCategories, updateDisplay = false)
+    }
+
+    private suspend fun restoreCategories(backupCategories: List<BackupCategory>, updateDisplay: Boolean) {
         if (backupCategories.isNotEmpty()) {
             val dbCategories = getCategories.await()
             val dbCategoriesByName = dbCategories.associateBy { it.name }
@@ -32,11 +40,13 @@ class CategoriesRestorer(
                     }
             }
 
-            libraryPreferences.categorizedDisplaySettings.set(
-                (dbCategories + categories)
-                    .distinctBy { it.flags }
-                    .size > 1,
-            )
+            if (updateDisplay) {
+                libraryPreferences.categorizedDisplaySettings.set(
+                    (dbCategories + categories)
+                        .distinctBy { it.flags }
+                        .size > 1,
+                )
+            }
         }
     }
 }
