@@ -65,22 +65,7 @@ class BackupCreator(
     }
 
     suspend fun backup(uri: Uri, options: BackupOptions): String {
-        // Use the same snapshot for the policy and serialization. Never consult UI visibility.
-        val mangas = if (options.libraryEntries) {
-            getFavorites.await() + if (options.readEntries) mangaRepository.getReadMangaNotInLibrary() else emptyList()
-        } else {
-            emptyList()
-        }
-        ConventionalBackupPolicy.check(mangas, options)
-        val backupManga = backupMangas(mangas, options)
-        val backup = Backup(
-            backupManga = backupManga,
-            backupCategories = backupCategories(options),
-            backupSources = backupSources(backupManga),
-            backupPreferences = backupAppPreferences(options),
-            backupExtensionStores = backupExtensionStores(options),
-            backupSourcePreferences = backupSourcePreferences(options),
-        )
+        val backup = buildBackup(options, allowPrivate = false)
         val byteArray = parser.encodeToByteArray(Backup.serializer(), backup)
         if (byteArray.isEmpty()) throw BackupException(BackupError.INVALID_FILE)
         if (byteArray.size > ConventionalBackupReader.MAX_DECOMPRESSED_BYTES) {
@@ -88,6 +73,49 @@ class BackupCreator(
         }
         currentCoroutineContext().ensureActive()
 
+        return publishConventional(uri, byteArray)
+    }
+
+    /** Manual only: no password or protected mode can enter the persisted automatic job. */
+    suspend fun backupProtected(uri: Uri, options: BackupOptions, password: CharArray): String =
+        protectedBackupOperation {
+            if (isAutoBackup) throw BackupException(BackupError.UNKNOWN)
+            ProtectedBackupPayload.checkResources()
+            val payload = protectedPayload(options)
+            val encrypted = try {
+                ProtectedBackupPayload.encrypt(payload, password)
+            } finally {
+                payload.fill(0)
+            }
+            currentCoroutineContext().ensureActive()
+            val file = UniFile.fromUri(context, uri) ?: throw BackupException(BackupError.IO)
+            ProtectedBackupPublication.publish(file, encrypted)
+            file.uri.toString()
+        }
+
+    private suspend fun protectedPayload(options: BackupOptions): ByteArray =
+        ProtectedBackupPayload.encode(buildBackup(options, allowPrivate = true), parser)
+
+    private suspend fun buildBackup(options: BackupOptions, allowPrivate: Boolean): Backup {
+        // Use the same snapshot for the policy and serialization. Never consult UI visibility.
+        val mangas = if (options.libraryEntries) {
+            getFavorites.await() + if (options.readEntries) mangaRepository.getReadMangaNotInLibrary() else emptyList()
+        } else {
+            emptyList()
+        }
+        if (!allowPrivate) ConventionalBackupPolicy.check(mangas, options)
+        val backupManga = backupMangas(mangas, options)
+        return Backup(
+            backupManga = backupManga,
+            backupCategories = backupCategories(options),
+            backupSources = backupSources(backupManga),
+            backupPreferences = backupAppPreferences(options),
+            backupExtensionStores = backupExtensionStores(options),
+            backupSourcePreferences = backupSourcePreferences(options),
+        )
+    }
+
+    private suspend fun publishConventional(uri: Uri, byteArray: ByteArray): String {
         val dir = if (isAutoBackup) UniFile.fromUri(context, uri) else null
         // Random suffix prevents a retry in the same minute from overwriting a valid copy.
         val file = if (isAutoBackup) {
@@ -189,5 +217,7 @@ class BackupCreator(
             val date = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.ENGLISH).format(Date())
             return "${BuildConfig.APPLICATION_ID}_${date}_${UUID.randomUUID()}.tachibk"
         }
+
+        fun getProtectedFilename(): String = "Pindorama_${UUID.randomUUID()}.pindobk"
     }
 }

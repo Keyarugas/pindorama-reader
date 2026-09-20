@@ -966,4 +966,15 @@
     <string name="pindorama_backup_io_error">Não foi possível acessar o backup. Verifique o armazenamento e as permissões.</string>
     <string name="pindorama_backup_destination_not_empty">Escolha um arquivo novo e vazio. Backups existentes não serão sobrescritos.</string>
     <string name="pindorama_backup_operation_failed">Não foi possível concluir a operação de backup.</string>
+
+    <!-- Pindorama experimental protected manual backup -->
+    <string name="pindorama_backup_protected_option">Backup protegido (.pindobk) — experimental</string>
+    <string name="pindorama_backup_protected_experimental">Experimental: este aplicativo ainda não restaura arquivos .pindobk. Não use este arquivo como sua única cópia. O recurso ainda não está pronto para distribuição pública.</string>
+    <string name="pindorama_backup_password_warning">Escolha uma senha forte e exclusiva e guarde-a em segurança. Ela será necessária para restaurar este arquivo, inclusive em outro dispositivo. Uma senha esquecida não pode ser recuperada. O aplicativo não a armazena.</string>
+    <string name="pindorama_backup_password_confirm">Confirme a senha do backup</string>
+    <string name="pindorama_backup_password_mismatch">As senhas não coincidem.</string>
+    <string name="pindorama_backup_password_invalid">Informe e confirme uma senha válida (até 1.024 caracteres). Se a tela foi fechada, informe-a novamente.</string>
+    <string name="pindorama_backup_memory_insufficient">Memória insuficiente para criar este backup protegido. Nada foi exportado como backup convencional. Tente novamente após encerrar outras operações ou use um dispositivo com mais memória disponível.</string>
+    <string name="pindorama_backup_protected_complete">Arquivo protegido gravado e verificado. A restauração de .pindobk ainda não está disponível neste aplicativo. Guarde a senha e outras cópias válidas.</string>
+    <string name="pindorama_backup_creation_cancelled">Criação de backup cancelada. Um arquivo protegido parcial pode permanecer se o provedor não conseguir removê-lo.</string>
 </resources>

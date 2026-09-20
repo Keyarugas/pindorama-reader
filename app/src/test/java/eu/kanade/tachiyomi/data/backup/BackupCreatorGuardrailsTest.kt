@@ -5,23 +5,31 @@ import android.net.Uri
 import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.data.backup.create.BackupCreator
 import eu.kanade.tachiyomi.data.backup.create.BackupOptions
+import eu.kanade.tachiyomi.data.backup.create.ProtectedBackupPayload
 import eu.kanade.tachiyomi.data.backup.create.creators.CategoriesBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.ExtensionStoresBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.MangaBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.PreferenceBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.SourcesBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.toBackupManga
+import eu.kanade.tachiyomi.data.backup.crypto.BackupCrypto
+import eu.kanade.tachiyomi.data.backup.crypto.BackupCryptoError
+import eu.kanade.tachiyomi.data.backup.crypto.BackupCryptoException
+import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.mockkStatic
+import io.mockk.unmockkObject
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.protobuf.ProtoBuf
+import okio.Buffer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -33,6 +41,7 @@ import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 
@@ -72,6 +81,117 @@ class BackupCreatorGuardrailsTest {
         automatic, context, ProtoBuf, favorites, backupPreferences, repository,
         categories, mangaCreator, preferences, stores, sources, validator,
     )
+
+    @Test
+    fun `synthetic full creation measures model serialization compression crypto and publication`() = runTest {
+        for (count in listOf(100, 1000, 5000)) {
+            val file = mockk<UniFile>()
+            val output = ByteArrayOutputStream()
+            every { UniFile.fromUri(context, uri) } returns file
+            every { file.isFile } returns true
+            every { file.length() } returns 0
+            every { file.openInputStream() } answers { ByteArrayInputStream(output.toByteArray()) }
+            every { file.openOutputStream() } returns output
+            every { file.uri } returns uri
+            every { uri.toString() } returns "content://synthetic/measurement"
+            coEvery { favorites.await() } answers {
+                val random = java.util.Random(42) // Reproducible synthetic content, never crypto entropy.
+                (1..count).map { id ->
+                    val noise = ByteArray(512).also(random::nextBytes).toHexString()
+                    privateManga.copy(id = id.toLong(), title = "Synthetic $id", description = noise)
+                }
+            }
+            coEvery { mangaCreator(any(), any()) } answers {
+                firstArg<List<Manga>>().map { manga ->
+                    manga.toBackupManga().apply {
+                        chapters = (1..20).map { BackupChapter("/synthetic/${manga.id}/$it", "Synthetic chapter $it") }
+                    }
+                }
+            }
+            val runtime = Runtime.getRuntime()
+            System.gc() // Measurement setup only, never production admission.
+            val baseline = runtime.totalMemory() - runtime.freeMemory()
+            val peak = java.util.concurrent.atomic.AtomicLong(baseline)
+            val sampler = Thread {
+                try {
+                    while (!Thread.currentThread().isInterrupted) {
+                        peak.accumulateAndGet(runtime.totalMemory() - runtime.freeMemory(), ::maxOf)
+                        Thread.sleep(1)
+                    }
+                } catch (_: InterruptedException) {
+                    // End of synthetic measurement.
+                }
+            }
+            sampler.start()
+            val started = System.nanoTime()
+            try {
+                creator(false).backupProtected(uri, BackupOptions(), "Synthetic measurement password".toCharArray())
+            } finally {
+                peak.accumulateAndGet(runtime.totalMemory() - runtime.freeMemory(), ::maxOf)
+                sampler.interrupt()
+                sampler.join()
+            }
+            val elapsedMs = (System.nanoTime() - started) / 1000000
+            println(
+                "SYNTHETIC_CREATE works=$count chapters=${count * 20} fileBytes=${output.size()} " +
+                    "elapsedMs=$elapsedMs heapMax=${runtime.maxMemory()} baseline=$baseline " +
+                    "sampledPeak=${peak.get()} additional=${peak.get() - baseline}",
+            )
+            assertEquals(1, BackupCrypto().identify(output.toByteArray()).version)
+            verify(exactly = 0) { file.delete() }
+        }
+    }
+
+    @Test
+    fun `protected creator exports private snapshot as authenticated gzip preserving private flag`() = runTest {
+        coEvery { favorites.await() } returns listOf(privateManga)
+        val file = mockk<UniFile>()
+        val output = ByteArrayOutputStream()
+        every { UniFile.fromUri(context, uri) } returns file
+        every { file.isFile } returns true
+        every { file.length() } returns 0
+        every { file.openInputStream() } answers { ByteArrayInputStream(output.toByteArray()) }
+        every { file.openOutputStream() } returns output
+        every { file.uri } returns uri
+        every { uri.toString() } returns "content://synthetic/protected"
+        val password = "Senha 🔒 sintética e\u0301".toCharArray()
+
+        assertEquals("content://synthetic/protected", creator(false).backupProtected(uri, BackupOptions(), password))
+
+        assertEquals(1, BackupCrypto().identify(output.toByteArray()).version)
+        val gzip = BackupCrypto().decrypt(output.toByteArray(), password)
+        val backup = ConventionalBackupReader.decode(Buffer().write(gzip), ProtoBuf)
+        assertTrue(backup.backupManga.single().isPrivate)
+        assertEquals(privateManga.title, backup.backupManga.single().title)
+        assertTrue(!output.toByteArray().toString(Charsets.ISO_8859_1).contains(privateManga.title))
+        verify(exactly = 0) { file.delete() }
+        coVerify(exactly = 0) { validator.validate(any()) }
+        assertEquals(0L, backupPreferences.lastAutoBackupTimestamp.get())
+    }
+
+    @Test
+    fun `protected path cannot be invoked by automatic creator`() = runTest {
+        assertThrows<BackupException> { creator(true).backupProtected(uri, BackupOptions(), "password".toCharArray()) }
+        verify(exactly = 0) { UniFile.fromUri(any(), any()) }
+        coVerify(exactly = 0) { favorites.await() }
+    }
+
+    @Test
+    fun `protected resource failure never opens destination or falls back to conventional`() = runTest {
+        mockkObject(ProtectedBackupPayload)
+        try {
+            every { ProtectedBackupPayload.checkResources() } throws
+                BackupCryptoException(BackupCryptoError.INSUFFICIENT_RESOURCES)
+            val error = assertThrows<BackupException> {
+                creator(false).backupProtected(uri, BackupOptions(), "password".toCharArray())
+            }
+            assertEquals(BackupError.INSUFFICIENT_RESOURCES, error.error)
+            verify(exactly = 0) { UniFile.fromUri(any(), any()) }
+            coVerify(exactly = 0) { favorites.await() }
+        } finally {
+            unmockkObject(ProtectedBackupPayload)
+        }
+    }
 
     @Test
     fun `manual and automatic block actual private snapshot before accessing destination`() = runTest {

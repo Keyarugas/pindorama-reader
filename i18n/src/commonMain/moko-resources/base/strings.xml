@@ -1136,4 +1136,15 @@
     <string name="pindorama_backup_io_error">Unable to access the backup. Check storage availability and permissions.</string>
     <string name="pindorama_backup_destination_not_empty">Choose a new, empty file. Existing backups will not be overwritten.</string>
     <string name="pindorama_backup_operation_failed">The backup operation could not be completed.</string>
+
+    <!-- Pindorama experimental protected manual backup -->
+    <string name="pindorama_backup_protected_option">Protected backup (.pindobk) — experimental</string>
+    <string name="pindorama_backup_protected_experimental">Experimental: this app cannot restore .pindobk files yet. Do not use this as your only backup. This feature is not ready for public distribution.</string>
+    <string name="pindorama_backup_password_warning">Choose a strong, unique password and keep it safely. It will be required to restore this file, including on another device. A forgotten password cannot be recovered. The app does not store it.</string>
+    <string name="pindorama_backup_password_confirm">Confirm backup password</string>
+    <string name="pindorama_backup_password_mismatch">The passwords do not match.</string>
+    <string name="pindorama_backup_password_invalid">Enter and confirm a valid password (up to 1,024 characters). If the screen was closed, enter it again.</string>
+    <string name="pindorama_backup_memory_insufficient">Not enough memory to create this protected backup. Nothing was exported as a conventional backup. Try again after closing other work, or use a device with more available memory.</string>
+    <string name="pindorama_backup_protected_complete">Protected file written and verified. Restoring .pindobk files is not available in this app yet. Keep your password and other valid backups.</string>
+    <string name="pindorama_backup_creation_cancelled">Backup creation cancelled. A partial protected file may remain if the storage provider could not remove it.</string>
 </resources>
