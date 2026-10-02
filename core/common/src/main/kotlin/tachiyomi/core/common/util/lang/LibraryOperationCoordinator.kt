@@ -79,6 +79,7 @@ class LibraryOperationCoordinator {
             exclusiveRequested = true
         }
         val lease = Lease(this)
+        var applicationStarted = false
         try {
             val acquired = withTimeoutOrNull(waitMillis) {
                 while (true) {
@@ -90,12 +91,16 @@ class LibraryOperationCoordinator {
             } ?: false
             if (!acquired) throw Unavailable()
             currentCoroutineContext().ensureActive()
-            // Invalidate even on application failure: a participant must not assume nothing changed.
-            synchronized(monitor) { epoch++ }
-            return withContext(lease) { block() }
+            return withContext(lease) {
+                applicationStarted = true
+                block()
+            }
         } finally {
             lease.valid = false
             val signal = synchronized(monitor) {
+                // Invalidate snapshots captured before or during application, even on failure.
+                // Publish atomically with admission release, before waking participants.
+                if (applicationStarted) epoch++
                 exclusiveRequested = false
                 nextSignal()
             }

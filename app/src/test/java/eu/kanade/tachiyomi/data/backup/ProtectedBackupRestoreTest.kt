@@ -31,9 +31,12 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.protobuf.ProtoBuf
 import okio.Buffer
@@ -46,12 +49,49 @@ import org.junit.jupiter.api.assertThrows
 import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.data.Database
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 
 class ProtectedBackupRestoreTest {
+    @Test
+    fun `restore without library selections bypasses active participant and preserves generation and data`() = runTest {
+        val target = Target()
+        val coordinator = LibraryOperationCoordinator.shared
+        val generation = coordinator.generation
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val participant = launch {
+            coordinator.operation {
+                entered.complete(Unit)
+                release.await()
+            }
+        }
+        entered.await()
+        try {
+            val prepared = PreparedProtectedRestore.validated(backup())
+            target.restorer.restore(
+                prepared,
+                RestoreOptions(categories = false, libraryEntries = false, appSettings = false),
+            )
+            assertTrue(participant.isActive)
+            assertEquals(generation, coordinator.generation)
+            target.untouched()
+            coVerify(exactly = 0) { target.database.transaction(any(), any()) }
+            coVerify(exactly = 0) { target.manga.restoreProtected(any(), any()) }
+            target.restorer.importVisualPreferences(prepared)
+            assertFalse(target.store.getBoolean("display_unread_badge").get())
+            assertTrue(target.store.getBoolean("display_unread_badge").isSet())
+            assertTrue(target.entries.isEmpty())
+            assertEquals(generation, coordinator.generation)
+            assertTrue(participant.isActive)
+        } finally {
+            participant.cancelAndJoin()
+        }
+    }
+
     @Test
     fun `library phase preserves preferences until explicit separate import`() = runTest {
         val target = Target()

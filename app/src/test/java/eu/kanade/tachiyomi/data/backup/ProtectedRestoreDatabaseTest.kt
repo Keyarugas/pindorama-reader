@@ -16,8 +16,16 @@ import eu.kanade.tachiyomi.data.backup.restore.ProtectedRestorePreferences
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.data.backup.restore.restorers.CategoriesRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
+import eu.kanade.tachiyomi.ui.reader.ReaderWriteGuard
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import mihon.app.di.AppBindings
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -25,6 +33,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.data.Database
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
@@ -56,9 +65,9 @@ class ProtectedRestoreDatabaseTest {
             UpdateManga(mangaRepository, fetch), GetTracks(tracks), InsertTrack(tracks), fetch,
             chapterRepository, tracks,
         )
-        fun restorer() = ProtectedBackupRestorer(
+        fun restorer(chapterRepository: ChapterRepository = chapters) = ProtectedBackupRestorer(
             CategoriesRestorer(database, categories, LibraryPreferences(store)),
-            manga(),
+            manga(chapterRepository),
             ProtectedRestorePreferences(store),
             database,
         )
@@ -68,6 +77,185 @@ class ProtectedRestoreDatabaseTest {
         JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).use { driver ->
             Database.Schema.create(driver).await()
             block(Target(AppBindings.providesDatabase(driver), driver))
+        }
+    }
+
+    @Test
+    fun `restore drains participants and invalidates readers before and during application`() = runTest {
+        withDatabase { target ->
+            val coordinator = LibraryOperationCoordinator.shared
+            val data = Backup(
+                listOf(
+                    BackupManga(
+                        1,
+                        "/synthetic",
+                        version = 10,
+                        chapters = listOf(BackupChapter("/chapter", "Synthetic", read = true)),
+                    ),
+                ),
+            )
+            target.manga().restoreProtected(
+                BackupManga(1, "/synthetic", chapters = listOf(BackupChapter("/chapter", "Synthetic"))),
+                emptyList(),
+            )
+            val manga = checkNotNull(target.mangaRepository.getMangaByUrlAndSourceId("/synthetic", 1))
+            val chapter = target.chapters.getChapterByMangaId(manga.id, false).single()
+            val guard = ReaderWriteGuard(target.database, target.mangaRepository, target.chapters)
+            val before = coordinator.generation
+            val finishParticipant = CompletableDeferred<Unit>()
+            val participant = launch { coordinator.operation { finishParticipant.await() } }
+            runCurrent()
+            val entered = CompletableDeferred<Long>()
+            val finishRestore = CompletableDeferred<Unit>()
+            val paused = object : ChapterRepository by target.chapters {
+                override suspend fun getChapterByMangaId(mangaId: Long, applyScanlatorFilter: Boolean): List<Chapter> {
+                    entered.complete(coordinator.generation)
+                    finishRestore.await()
+                    return target.chapters.getChapterByMangaId(mangaId, applyScanlatorFilter)
+                }
+            }
+            val prepared = PreparedProtectedRestore.validated(data)
+            val restore = launch { target.restorer(paused).restore(prepared, RestoreOptions(appSettings = false)) }
+            runCurrent()
+            assertFalse(entered.isCompleted)
+            assertFalse(target.chapters.getChapterByMangaId(manga.id, false).single().read)
+            finishParticipant.complete(Unit)
+            participant.join()
+            val during = entered.await()
+            val next = async {
+                coordinator.operation {
+                    coordinator.generation to target.chapters.getChapterByMangaId(manga.id, false).single().read
+                }
+            }
+            runCurrent()
+            assertFalse(next.isCompleted)
+            finishRestore.complete(Unit)
+            restore.join()
+            assertEquals(before + 1 to true, next.await())
+            assertEquals(before, during)
+            for (generation in listOf(before, during)) {
+                assertThrows<ReaderWriteGuard.StaleState> {
+                    guard.progress(generation, manga, chapter, 0, false, false)
+                }
+            }
+            assertTrue(target.chapters.getChapterByMangaId(manga.id, false).single().read)
+        }
+    }
+
+    @Test
+    fun `restore admission timeout reports only busy and applies no data or generation change`() = runTest {
+        withDatabase { target ->
+            val coordinator = LibraryOperationCoordinator.shared
+            val generation = coordinator.generation
+            val release = CompletableDeferred<Unit>()
+            val participant = launch { coordinator.operation { release.await() } }
+            runCurrent()
+            val prepared = PreparedProtectedRestore.validated(Backup(listOf(BackupManga(1, "/new"))))
+            val restore = async {
+                assertThrows<BackupException> { target.restorer().restore(prepared, RestoreOptions()) }
+            }
+            runCurrent()
+            advanceTimeBy(30_001)
+            val error = restore.await()
+            assertEquals(BackupError.BUSY, error.error)
+            assertEquals("BUSY", error.message)
+            assertEquals(null, error.cause)
+            assertEquals(generation, coordinator.generation)
+            assertTrue(target.database.mangasQueries.getAllMangaSourceAndUrl().awaitAsList().isEmpty())
+            assertTrue(participant.isActive)
+            release.complete(Unit)
+            participant.join()
+            coordinator.exclusive { }
+        }
+    }
+
+    @Test
+    fun `concurrent exclusive restore is refused without exposing coordinator exception`() = runTest {
+        withDatabase { target ->
+            val coordinator = LibraryOperationCoordinator.shared
+            val release = CompletableDeferred<Unit>()
+            val exclusive = launch { coordinator.exclusive { release.await() } }
+            runCurrent()
+            val prepared = PreparedProtectedRestore.validated(Backup(listOf(BackupManga(1, "/new"))))
+            val error = assertThrows<BackupException> { target.restorer().restore(prepared, RestoreOptions()) }
+            assertEquals(BackupError.BUSY, error.error)
+            assertEquals(null, error.cause)
+            assertTrue(target.database.mangasQueries.getAllMangaSourceAndUrl().awaitAsList().isEmpty())
+            release.complete(Unit)
+            exclusive.join()
+            coordinator.operation { }
+        }
+    }
+
+    @Test
+    fun `cancel restore while draining releases admission without changing database or generation`() = runTest {
+        withDatabase { target ->
+            val coordinator = LibraryOperationCoordinator.shared
+            val generation = coordinator.generation
+            val release = CompletableDeferred<Unit>()
+            val participant = launch { coordinator.operation { release.await() } }
+            runCurrent()
+            val prepared = PreparedProtectedRestore.validated(Backup(listOf(BackupManga(1, "/new"))))
+            val restore = launch { target.restorer().restore(prepared, RestoreOptions()) }
+            runCurrent()
+            restore.cancelAndJoin()
+            assertEquals(generation, coordinator.generation)
+            coordinator.operation { }
+            assertTrue(target.database.mangasQueries.getAllMangaSourceAndUrl().awaitAsList().isEmpty())
+            release.complete(Unit)
+            participant.join()
+            coordinator.exclusive { }
+        }
+    }
+
+    @Test
+    fun `cancel during real restore transaction rolls back and invalidates before releasing admission`() = runTest {
+        withDatabase { target ->
+            val coordinator = LibraryOperationCoordinator.shared
+            val generation = coordinator.generation
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val paused = object : ChapterRepository by target.chapters {
+                override suspend fun getChapterByMangaId(mangaId: Long, applyScanlatorFilter: Boolean): List<Chapter> {
+                    entered.complete(Unit)
+                    release.await()
+                    return target.chapters.getChapterByMangaId(mangaId, applyScanlatorFilter)
+                }
+            }
+            val prepared = PreparedProtectedRestore.validated(Backup(listOf(BackupManga(1, "/new"))))
+            val restore = launch { target.restorer(paused).restore(prepared, RestoreOptions()) }
+            entered.await()
+            restore.cancelAndJoin()
+            assertEquals(generation + 1, coordinator.generation)
+            coordinator.operation { }
+            assertTrue(target.database.mangasQueries.getAllMangaSourceAndUrl().awaitAsList().isEmpty())
+            coordinator.exclusive { }
+        }
+    }
+
+    @Test
+    fun `real restore SQL failure rolls back and releases exclusive with conservative invalidation`() = runTest {
+        withDatabase { target ->
+            val coordinator = LibraryOperationCoordinator.shared
+            val generation = coordinator.generation
+            val before = target.categories.await()
+            target.driver.execute(
+                null,
+                "CREATE TRIGGER reject_category BEFORE INSERT ON categories " +
+                    "BEGIN SELECT RAISE(ABORT, 'synthetic'); END",
+                0,
+            ).await()
+            val data = Backup(listOf(BackupManga(1, "/new"))).apply {
+                backupCategories = listOf(BackupCategory("Synthetic"))
+            }
+            assertThrows<BackupException> {
+                target.restorer().restore(PreparedProtectedRestore.validated(data), RestoreOptions())
+            }
+            assertEquals(generation + 1, coordinator.generation)
+            coordinator.operation { }
+            assertEquals(before, target.categories.await())
+            assertTrue(target.database.mangasQueries.getAllMangaSourceAndUrl().awaitAsList().isEmpty())
+            coordinator.exclusive { }
         }
     }
 

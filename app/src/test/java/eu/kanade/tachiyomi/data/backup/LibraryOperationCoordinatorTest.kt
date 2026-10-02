@@ -20,6 +20,29 @@ import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 
 class LibraryOperationCoordinatorTest {
     @Test
+    fun `snapshots before and during exclusive expire before blocked participants resume`() = runTest {
+        val coordinator = LibraryOperationCoordinator()
+        val before = coordinator.generation
+        val entered = CompletableDeferred<Long>()
+        val release = CompletableDeferred<Unit>()
+        val exclusive = launch {
+            coordinator.exclusive {
+                entered.complete(coordinator.generation)
+                release.await()
+            }
+        }
+        val during = entered.await()
+        val participant = async { coordinator.operation { coordinator.generation } }
+        runCurrent()
+        assertFalse(participant.isCompleted)
+        assertEquals(before, during)
+        release.complete(Unit)
+        exclusive.join()
+        assertEquals(before + 1, participant.await())
+        assertEquals(during + 1, coordinator.generation)
+    }
+
+    @Test
     fun `independent producer must participate itself because cancelling its waiter does not stop it`() = runTest {
         val coordinator = LibraryOperationCoordinator()
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
@@ -95,11 +118,13 @@ class LibraryOperationCoordinatorTest {
         val release = CompletableDeferred<Unit>()
         val existing = launch { coordinator.operation { release.await() } }
         runCurrent()
+        val generation = coordinator.generation
         var applied = false
         val restore = launch { coordinator.exclusive { applied = true } }
         runCurrent()
         restore.cancelAndJoin()
         assertFalse(applied)
+        assertEquals(generation, coordinator.generation)
         assertTrue(existing.isActive)
         coordinator.operation { }
         release.complete(Unit)
@@ -113,11 +138,13 @@ class LibraryOperationCoordinatorTest {
         val release = CompletableDeferred<Unit>()
         val existing = launch { coordinator.operation { release.await() } }
         runCurrent()
+        val generation = coordinator.generation
         val restore = async {
             assertThrows<LibraryOperationCoordinator.Unavailable> { coordinator.exclusive(50) { error("unexpected") } }
         }
         advanceTimeBy(51)
         restore.await()
+        assertEquals(generation, coordinator.generation)
         assertTrue(existing.isActive)
         release.complete(Unit)
         existing.join()
@@ -127,12 +154,15 @@ class LibraryOperationCoordinatorTest {
     @Test
     fun `failure and cancellation during exclusive application release admission`() = runTest {
         val coordinator = LibraryOperationCoordinator()
+        val generation = coordinator.generation
         assertThrows<IllegalStateException> { coordinator.exclusive { error("synthetic") } }
+        assertEquals(generation + 1, coordinator.generation)
         coordinator.operation { }
         val release = CompletableDeferred<Unit>()
         val restore = launch { coordinator.exclusive { release.await() } }
         runCurrent()
         restore.cancelAndJoin()
+        assertEquals(generation + 2, coordinator.generation)
         coordinator.operation { }
         coordinator.exclusive { }
     }

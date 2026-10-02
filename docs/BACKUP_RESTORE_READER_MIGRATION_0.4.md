@@ -1,5 +1,12 @@
 # Coordenação 0.4 — produtores da migração e snapshots do Reader
 
+> Atualização localizada: a aplicação SQLite da restauração protegida agora usa
+> exclusividade contra os participantes já adaptados. A geração é publicada ao final,
+> antes de liberar a admissão, inclusive após falha/cancelamento da aplicação; timeout
+> ou cancelamento durante drenagem não a alteram. Preferências visuais ficam fora dessa
+> exclusividade. Isso NÃO representa cobertura global de escritores, Workers ou filas.
+> O restante deste documento registra a rodada anterior, quando a restauração estava desconectada.
+
 Branch: `pindorama/backup-restore-coordination-0.4`.
 Base preservada: `897e320e0491fe546be446b38670565c4ba90dd8`.
 Esta rodada preserva as preferências visuais opcionais, os testes anteriores e o
