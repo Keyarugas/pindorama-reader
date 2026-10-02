@@ -34,6 +34,7 @@ import mihon.domain.source.interactor.UpdateMangaFromRemote
 import mihon.feature.migration.list.models.MigratingManga
 import mihon.feature.migration.list.models.MigratingManga.SearchResult
 import mihon.feature.migration.list.search.SmartSourceSearchEngine
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
@@ -134,7 +135,7 @@ class MigrationListViewModel(
             if (!manga.migrationScope.isActive) continue
 
             val result = try {
-                manga.migrationScope.async {
+                manga.produce {
                     if (prioritizeByChapters) {
                         val sourceSemaphore = Semaphore(5)
                         sources.map { source ->
@@ -151,7 +152,7 @@ class MigrationListViewModel(
                     } else {
                         sources.forEach { source ->
                             val result = searchSource(manga.manga, source, deepSearchMode)
-                            if (result != null) return@async result
+                            if (result != null) return@produce result
                         }
                         null
                     }
@@ -163,7 +164,14 @@ class MigrationListViewModel(
 
             if (result != null && result.first.thumbnailUrl == null) {
                 try {
-                    updateMangaFromRemote(result.first, fetchDetails = true, manualFetch = true).getOrThrow().manga
+                    LibraryOperationCoordinator.shared.operation {
+                        val current = getManga.await(result.first.id)
+                        if (current != null && current.source == result.first.source &&
+                            current.url == result.first.url
+                        ) {
+                            updateMangaFromRemote(current, fetchDetails = true, manualFetch = true).getOrThrow()
+                        }
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -192,10 +200,12 @@ class MigrationListViewModel(
         deepSearchMode: Boolean,
     ): Pair<Manga, ChapterInfo>? {
         return try {
+            val current = getManga.await(manga.id) ?: return null
+            if (current.source != manga.source || current.url != manga.url) return null
             val searchResult = if (deepSearchMode) {
-                smartSearchEngine.deepSearch(source, manga.title)
+                smartSearchEngine.deepSearch(source, current.title)
             } else {
-                smartSearchEngine.regularSearch(source, manga.title)
+                smartSearchEngine.regularSearch(source, current.title)
             }
 
             if (searchResult == null || (searchResult.url == manga.url && source.id == manga.source)) return null
@@ -233,8 +243,8 @@ class MigrationListViewModel(
         val migratingManga = items.find { it.manga.id == current } ?: return
         migratingManga.searchResult.value = SearchResult.Searching
         viewModelScope.launchIO {
-            val result = migratingManga.migrationScope.async {
-                val manga = getManga.await(target) ?: return@async null
+            val result = migratingManga.produce {
+                val manga = getManga.await(target) ?: return@produce null
                 try {
                     val source = sourceManager.get(manga.source)!!
                     updateMangaFromRemote(source = source, manga = manga, fetchChapters = true).getOrThrow().manga
@@ -265,7 +275,7 @@ class MigrationListViewModel(
 
     private fun migrateMangas(replace: Boolean) {
         migrateJob = viewModelScope.launchIO {
-            state.update { it.copy(dialog = Dialog.Progress(0f)) }
+            state.update { it.copy(dialog = Dialog.Progress(0f), migrationFailed = false) }
             val items = items
             try {
                 items.forEachIndexed { index, manga ->
@@ -279,18 +289,20 @@ class MigrationListViewModel(
                             }
                         }
                         if (target != null) {
-                            migrateManga(current = manga.manga, target = target, replace = replace)
+                            if (!migrateManga(current = manga.manga, target = target, replace = replace)) {
+                                state.update { it.copy(migrationFailed = true) }
+                            }
                         }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
-                        logcat(LogPriority.WARN, throwable = e)
+                        state.update { it.copy(migrationFailed = true) }
                     }
                     state.update {
                         it.copy(dialog = Dialog.Progress((index.toFloat() / items.size).coerceAtMost(1f)))
                     }
                 }
 
-                navigateBack()
+                if (!state.value.migrationFailed) navigateBack()
             } finally {
                 state.update { it.copy(dialog = null) }
                 migrateJob = null
@@ -311,9 +323,11 @@ class MigrationListViewModel(
         viewModelScope.launchIO {
             val manga = items.find { it.manga.id == mangaId } ?: return@launchIO
             val target = (manga.searchResult.value as? SearchResult.Success)?.manga ?: return@launchIO
-            migrateManga(current = manga.manga, target = target, replace = replace)
-
-            removeManga(mangaId)
+            if (migrateManga(current = manga.manga, target = target, replace = replace)) {
+                removeManga(mangaId)
+            } else {
+                state.update { it.copy(migrationFailed = true) }
+            }
         }
     }
 
@@ -373,6 +387,7 @@ class MigrationListViewModel(
         val items: List<MigratingManga> = listOf(),
         val finishedCount: Int = 0,
         val migrationComplete: Boolean = false,
+        val migrationFailed: Boolean = false,
         val dialog: Dialog? = null,
     ) {
         val mangaIds: List<Long> = items.map { it.manga.id }

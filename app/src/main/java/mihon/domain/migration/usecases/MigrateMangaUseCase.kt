@@ -11,11 +11,13 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.CancellationException
 import mihon.domain.migration.models.MigrationFlag
 import mihon.domain.source.interactor.UpdateMangaFromRemote
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.toChapterUpdate
+import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.source.service.SourceManager
@@ -26,6 +28,7 @@ import kotlin.time.Clock
 @Inject
 class MigrateMangaUseCase(
     private val sourcePreferences: SourcePreferences,
+    private val getManga: GetManga,
     private val trackerManager: TrackerManager,
     private val sourceManager: SourceManager,
     private val downloadManager: DownloadManager,
@@ -41,8 +44,21 @@ class MigrateMangaUseCase(
 ) {
     private val enhancedServices by lazy { trackerManager.trackers.filterIsInstance<EnhancedTracker>() }
 
-    suspend operator fun invoke(current: Manga, target: Manga, replace: Boolean) {
-        val targetSource = sourceManager.get(target.source) ?: return
+    suspend operator fun invoke(current: Manga, target: Manga, replace: Boolean): Boolean =
+        LibraryOperationCoordinator.shared.operation {
+            val freshCurrent = getManga.await(current.id)
+            val freshTarget = getManga.await(target.id)
+            if (freshCurrent == null || freshCurrent.source != current.source || freshCurrent.url != current.url) {
+                return@operation false
+            }
+            if (freshTarget == null || freshTarget.source != target.source || freshTarget.url != target.url) {
+                return@operation false
+            }
+            migrate(freshCurrent, freshTarget, replace)
+        }
+
+    private suspend fun migrate(current: Manga, target: Manga, replace: Boolean): Boolean {
+        val targetSource = sourceManager.get(target.source) ?: return false
         val currentSource = sourceManager.get(current.source)
         val flags = sourcePreferences.migrationFlags.get()
 
@@ -107,7 +123,7 @@ class MigrateMangaUseCase(
 
             // Delete downloaded
             if (MigrationFlag.REMOVE_DOWNLOAD in flags && currentSource != null) {
-                downloadManager.deleteManga(current, currentSource)
+                downloadManager.deleteMangaAndWait(current, currentSource)
             }
 
             // Update custom cover (recheck if custom cover exists)
@@ -131,11 +147,12 @@ class MigrateMangaUseCase(
                 notes = if (MigrationFlag.NOTES in flags) current.notes else null,
             )
 
-            updateManga.awaitAll(listOfNotNull(currentMangaUpdate, targetMangaUpdate))
+            return updateManga.awaitAll(listOfNotNull(currentMangaUpdate, targetMangaUpdate))
         } catch (e: Throwable) {
             if (e is CancellationException) {
                 throw e
             }
+            return false
         }
     }
 }

@@ -79,6 +79,7 @@ internal fun Screen.MigrateMangaDialog(
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             ) {
+                if (state.failed) Text(stringResource(MR.strings.pindorama_migration_failed))
                 state.applicableFlags.fastForEach { flag ->
                     LabeledCheckbox(
                         label = stringResource(flag.getLabel()),
@@ -106,8 +107,7 @@ internal fun Screen.MigrateMangaDialog(
                 TextButton(
                     onClick = {
                         scope.launchIO {
-                            viewModel.migrateManga(replace = false)
-                            withUIContext { onComplete() }
+                            if (viewModel.migrateManga(replace = false)) withUIContext { onComplete() }
                         }
                     },
                 ) {
@@ -116,8 +116,7 @@ internal fun Screen.MigrateMangaDialog(
                 TextButton(
                     onClick = {
                         scope.launchIO {
-                            viewModel.migrateManga(replace = true)
-                            withUIContext { onComplete() }
+                            if (viewModel.migrateManga(replace = true)) withUIContext { onComplete() }
                         }
                     },
                 ) {
@@ -174,14 +173,19 @@ class MigrateDialogViewModel(
         }
     }
 
-    suspend fun migrateManga(replace: Boolean) {
+    suspend fun migrateManga(replace: Boolean): Boolean {
         val currentState = state.value
-        val current = currentState.current ?: return
-        val target = currentState.target ?: return
+        val current = currentState.current ?: return false
+        val target = currentState.target ?: return false
         sourcePreference.migrationFlags.set(currentState.selectedFlags)
-        state.update { it.copy(isMigrating = true) }
-        migrateManga(current, target, replace)
-        state.update { it.copy(isMigrating = false, isMigrated = true) }
+        state.update { it.copy(isMigrating = true, failed = false) }
+        try {
+            val completed = migrateManga(current, target, replace)
+            state.update { it.copy(isMigrated = completed, failed = !completed) }
+            return completed
+        } finally {
+            state.update { it.copy(isMigrating = false) }
+        }
     }
 
     data class State(
@@ -191,5 +195,6 @@ class MigrateDialogViewModel(
         val selectedFlags: Set<MigrationFlag> = emptySet(),
         val isMigrating: Boolean = false,
         val isMigrated: Boolean = false,
+        val failed: Boolean = false,
     )
 }

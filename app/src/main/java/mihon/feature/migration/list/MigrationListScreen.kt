@@ -49,6 +49,9 @@ class MigrationListScreen(private val mangaIds: Collection<Long>, private val ex
             matchOverride = null
         }
 
+        LaunchedEffect(state.migrationFailed) {
+            if (state.migrationFailed) context.toast(MR.strings.pindorama_migration_failed)
+        }
         LaunchedEffect(viewModel) {
             viewModel.navigateBackEvent.collect {
                 navigator.pop()

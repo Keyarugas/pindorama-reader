@@ -16,6 +16,11 @@ class ProtectedBackupRestorer(
     private val preferences: ProtectedRestorePreferences,
     private val database: Database,
 ) {
+    /** Explicit, separate import. Never schedules tasks or changes security preferences. */
+    internal suspend fun importVisualPreferences(prepared: PreparedProtectedRestore) = protectedBackupOperation {
+        preferences.apply(prepared.backup.backupPreferences)
+    }
+
     internal suspend fun restore(
         prepared: PreparedProtectedRestore,
         options: RestoreOptions,

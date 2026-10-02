@@ -21,6 +21,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.storage.extension
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
@@ -272,19 +273,22 @@ class DownloadManager(
      * @param removeQueued whether to also remove queued downloads.
      */
     fun deleteManga(manga: Manga, source: Source, removeQueued: Boolean = true) {
-        launchIO {
-            if (removeQueued) {
-                downloader.removeFromQueue(manga)
-            }
-            provider.findMangaDir(manga.title, source)?.delete()
-            cache.removeManga(manga)
+        launchIO { deleteMangaAndWait(manga, source, removeQueued) }
+    }
 
-            // Delete source directory if empty
-            val sourceDir = provider.findSourceDir(source)
-            if (sourceDir?.listFiles()?.isEmpty() == true) {
-                sourceDir.delete()
-                cache.removeSource(source)
-            }
+    /** A migration must retain ownership until filesystem effects have actually finished. */
+    suspend fun deleteMangaAndWait(manga: Manga, source: Source, removeQueued: Boolean = true) = withIOContext {
+        if (removeQueued) {
+            downloader.removeFromQueue(manga)
+        }
+        provider.findMangaDir(manga.title, source)?.delete()
+        cache.removeManga(manga)
+
+        // Delete source directory if empty
+        val sourceDir = provider.findSourceDir(source)
+        if (sourceDir?.listFiles()?.isEmpty() == true) {
+            sourceDir.delete()
+            cache.removeSource(source)
         }
     }
 

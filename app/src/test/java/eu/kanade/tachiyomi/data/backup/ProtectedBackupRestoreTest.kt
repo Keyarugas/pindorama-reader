@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BooleanPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.IntPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue
+import eu.kanade.tachiyomi.data.backup.restore.PreparedProtectedRestore
 import eu.kanade.tachiyomi.data.backup.restore.ProtectedBackupRestorer
 import eu.kanade.tachiyomi.data.backup.restore.ProtectedRestoreLoader
 import eu.kanade.tachiyomi.data.backup.restore.ProtectedRestorePreferences
@@ -51,6 +52,19 @@ import java.io.IOException
 import java.nio.ByteBuffer
 
 class ProtectedBackupRestoreTest {
+    @Test
+    fun `library phase preserves preferences until explicit separate import`() = runTest {
+        val target = Target()
+        target.store.getBoolean("display_unread_badge").set(true)
+        val prepared = PreparedProtectedRestore.validated(backup())
+        target.restorer.restore(prepared, RestoreOptions(appSettings = false))
+        assertTrue(target.entries.single().isPrivate)
+        assertTrue(target.store.getBoolean("display_unread_badge").get())
+        target.restorer.importVisualPreferences(prepared)
+        assertFalse(target.store.getBoolean("display_unread_badge").get())
+        assertEquals(1, target.entries.size)
+    }
+
     private val password get() = "Senha sintética 🔒\u0000 e\u0301".toCharArray()
     private fun fixture() = checkNotNull(
         javaClass.getResourceAsStream("/backup-protected-create/private-gzip-v1.pindobk"),

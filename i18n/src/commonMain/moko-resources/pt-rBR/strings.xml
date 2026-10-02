@@ -985,4 +985,12 @@
     <string name="pindorama_restore_complete">Dados selecionados e suportados restaurados. Configurações locais de segurança e tarefas automáticas foram preservadas.</string>
     <string name="pindorama_restore_partial">A restauração não terminou. A biblioteca é aplicada em uma transação; se já confirmada, pode permanecer. As preferências visuais podem exigir revisão. Nenhuma tarefa automática foi configurada por esta importação.</string>
     <string name="pindorama_restore_preference_recovery_failed">A restauração falhou e não foi possível recuperar todas as preferências visuais. Revise as configurações locais de exibição. Os dados da biblioteca podem já ter sido confirmados.</string>
+    <string name="pindorama_restore_library_complete">A etapa dos dados da biblioteca selecionados foi concluída.</string>
+    <string name="pindorama_restore_visual_option">Importar as nove preferências visuais suportadas (opcional)</string>
+    <string name="pindorama_restore_visual_not_selected">Preferências visuais não selecionadas. As preferências locais foram preservadas.</string>
+    <string name="pindorama_restore_visual_pending">Importando as preferências visuais separadamente.</string>
+    <string name="pindorama_restore_visual_complete">Preferências visuais importadas.</string>
+    <string name="pindorama_restore_visual_failed">A importação das preferências visuais não terminou. Revise as configurações visuais locais. Os dados da biblioteca já confirmados permanecem restaurados.</string>
+    <string name="pindorama_reader_write_rejected">Não foi possível salvar as alterações da leitura. Reabra o Reader para atualizar os dados.</string>
+    <string name="pindorama_migration_failed">A migração não foi concluída. Atualize as obras selecionadas e tente novamente. Algumas alterações podem já ter sido aplicadas.</string>
 </resources>

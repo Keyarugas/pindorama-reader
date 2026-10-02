@@ -143,6 +143,25 @@ class RestoreBackupScreen(
                 if (state.complete) {
                     item { Text(stringResource(MR.strings.pindorama_restore_complete), Modifier.padding(16.dp)) }
                 }
+                if (state.libraryComplete) {
+                    item {
+                        Text(stringResource(MR.strings.pindorama_restore_library_complete), Modifier.padding(16.dp))
+                    }
+                    item {
+                        Text(
+                            stringResource(
+                                when (state.visualPreferences) {
+                                    VisualPreferenceImport.NOT_SELECTED ->
+                                        MR.strings.pindorama_restore_visual_not_selected
+                                    VisualPreferenceImport.PENDING -> MR.strings.pindorama_restore_visual_pending
+                                    VisualPreferenceImport.COMPLETE -> MR.strings.pindorama_restore_visual_complete
+                                    VisualPreferenceImport.FAILED -> MR.strings.pindorama_restore_visual_failed
+                                },
+                            ),
+                            Modifier.padding(16.dp),
+                        )
+                    }
+                }
                 if (state.applicationStarted && !state.complete && !state.working) {
                     item { WarningBanner(MR.strings.pindorama_restore_partial) }
                 }
@@ -156,7 +175,13 @@ class RestoreBackupScreen(
                                     )
                             }.forEach { option ->
                                 LabeledCheckbox(
-                                    label = stringResource(option.label),
+                                    label = stringResource(
+                                        if (state.protectedBackup && option.label == MR.strings.app_settings) {
+                                            MR.strings.pindorama_restore_visual_option
+                                        } else {
+                                            option.label
+                                        },
+                                    ),
                                     checked = option.getter(state.options),
                                     enabled = !state.working,
                                     onCheckedChange = {
@@ -284,7 +309,7 @@ class RestoreBackupViewModel(
                     it.copy(
                         canRestore = true,
                         needsPassword = false,
-                        options = it.options.copy(sourceSettings = false, extensionStores = false),
+                        options = it.options.copy(appSettings = false, sourceSettings = false, extensionStores = false),
                     )
                 }
             } catch (_: CancellationException) {
@@ -339,7 +364,21 @@ class RestoreBackupViewModel(
                 try {
                     currentCoroutineContext().ensureActive()
                     state.update { it.copy(applicationStarted = true) }
-                    protectedRestorer.restore(value, options)
+                    protectedRestorer.restore(value, options.copy(appSettings = false))
+                    state.update {
+                        it.copy(
+                            libraryComplete = true,
+                            visualPreferences = if (options.appSettings) {
+                                VisualPreferenceImport.PENDING
+                            } else {
+                                VisualPreferenceImport.NOT_SELECTED
+                            },
+                        )
+                    }
+                    if (options.appSettings) {
+                        protectedRestorer.importVisualPreferences(value)
+                        state.update { it.copy(visualPreferences = VisualPreferenceImport.COMPLETE) }
+                    }
                     currentCoroutineContext().ensureActive()
                     state.update { it.copy(complete = true) }
                 } catch (_: CancellationException) {
@@ -349,7 +388,17 @@ class RestoreBackupViewModel(
                 }
             }.also { job ->
                 job.invokeOnCompletion { cause ->
-                    state.update { it.copy(working = false, complete = it.complete && cause == null) }
+                    state.update {
+                        it.copy(
+                            working = false,
+                            complete = it.complete && cause == null,
+                            visualPreferences = if (it.visualPreferences == VisualPreferenceImport.PENDING) {
+                                VisualPreferenceImport.FAILED
+                            } else {
+                                it.visualPreferences
+                            },
+                        )
+                    }
                 }
             }
             return false
@@ -401,10 +450,19 @@ class RestoreBackupViewModel(
         val working: Boolean = false,
         val applicationStarted: Boolean = false,
         val complete: Boolean = false,
+        val libraryComplete: Boolean = false,
+        val visualPreferences: VisualPreferenceImport = VisualPreferenceImport.NOT_SELECTED,
         val error: Any? = null,
         val canRestore: Boolean = false,
         val options: RestoreOptions = RestoreOptions(),
     )
+}
+
+enum class VisualPreferenceImport {
+    NOT_SELECTED,
+    PENDING,
+    COMPLETE,
+    FAILED,
 }
 
 private data class MissingRestoreComponents(

@@ -1155,4 +1155,12 @@
     <string name="pindorama_restore_complete">Selected supported data restored. Local security settings and automatic tasks were preserved.</string>
     <string name="pindorama_restore_partial">Restoration did not complete. Library data is applied in one transaction; if already committed, it can remain. Display preferences may need review. No automatic tasks were configured by this import.</string>
     <string name="pindorama_restore_preference_recovery_failed">Restoration failed and display preferences could not be fully recovered. Review local display settings. Library data may already have been committed.</string>
+    <string name="pindorama_restore_library_complete">The selected library data phase completed.</string>
+    <string name="pindorama_restore_visual_option">Import the nine supported display preferences (optional)</string>
+    <string name="pindorama_restore_visual_not_selected">Display preferences were not selected. Local preferences were preserved.</string>
+    <string name="pindorama_restore_visual_pending">Importing display preferences separately.</string>
+    <string name="pindorama_restore_visual_complete">Display preferences imported.</string>
+    <string name="pindorama_restore_visual_failed">Display preference import did not complete. Review local display settings. The committed library data remains restored.</string>
+    <string name="pindorama_reader_write_rejected">Reading changes could not be saved. Reopen the reader to refresh its data.</string>
+    <string name="pindorama_migration_failed">Migration did not complete. Refresh the selected works and try again. Some changes may already have been applied.</string>
 </resources>
