@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import logcat.LogPriority
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.interactor.GetTracks
@@ -24,38 +25,43 @@ class TrackChapter(
 ) {
 
     suspend fun await(context: Context, mangaId: Long, chapterNumber: Double, setupJobOnFailure: Boolean = true) {
+        val coordinator = LibraryOperationCoordinator.shared
+        val generation = coordinator.generation
         withNonCancellableContext {
-            val tracks = getTracks.await(mangaId)
-            if (tracks.isEmpty()) return@withNonCancellableContext
+            coordinator.operation {
+                if (generation != coordinator.generation) return@operation
+                val tracks = getTracks.await(mangaId)
+                if (tracks.isEmpty()) return@operation
 
-            tracks.mapNotNull { track ->
-                val service = trackerManager.get(track.trackerId)
-                if (service == null || !service.isLoggedIn || chapterNumber <= track.lastChapterRead) {
-                    return@mapNotNull null
-                }
+                tracks.mapNotNull { track ->
+                    val service = trackerManager.get(track.trackerId)
+                    if (service == null || !service.isLoggedIn || chapterNumber <= track.lastChapterRead) {
+                        return@mapNotNull null
+                    }
 
-                async {
-                    runCatching {
-                        try {
-                            val updatedTrack = service.refresh(track.toDbTrack())
-                                .toDomainTrack(idRequired = true)!!
-                                .copy(lastChapterRead = chapterNumber)
-                            service.update(updatedTrack.toDbTrack(), true)
-                            insertTrack.await(updatedTrack)
-                            delayedTrackingStore.remove(track.id)
-                        } catch (e: Exception) {
-                            delayedTrackingStore.add(track.id, chapterNumber)
-                            if (setupJobOnFailure) {
-                                DelayedTrackingUpdateJob.setupTask(context)
+                    async {
+                        runCatching {
+                            try {
+                                val updatedTrack = service.refresh(track.toDbTrack())
+                                    .toDomainTrack(idRequired = true)!!
+                                    .copy(lastChapterRead = chapterNumber)
+                                service.update(updatedTrack.toDbTrack(), true)
+                                insertTrack.await(updatedTrack)
+                                delayedTrackingStore.remove(track.id)
+                            } catch (e: Exception) {
+                                delayedTrackingStore.add(track.id, chapterNumber)
+                                if (setupJobOnFailure) {
+                                    DelayedTrackingUpdateJob.setupTask(context)
+                                }
+                                throw e
                             }
-                            throw e
                         }
                     }
                 }
+                    .awaitAll()
+                    .mapNotNull { it.exceptionOrNull() }
+                    .forEach { logcat(LogPriority.WARN, it) }
             }
-                .awaitAll()
-                .mapNotNull { it.exceptionOrNull() }
-                .forEach { logcat(LogPriority.WARN, it) }
         }
     }
 }

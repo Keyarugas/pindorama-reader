@@ -993,4 +993,5 @@
     <string name="pindorama_restore_visual_failed">A importação das preferências visuais não terminou. Revise as configurações visuais locais. Os dados da biblioteca já confirmados permanecem restaurados.</string>
     <string name="pindorama_reader_write_rejected">Não foi possível salvar as alterações da leitura. Reabra o Reader para atualizar os dados.</string>
     <string name="pindorama_migration_failed">A migração não foi concluída. Atualize as obras selecionadas e tente novamente. Algumas alterações podem já ter sido aplicadas.</string>
+    <string name="pindorama_restore_pending_tracking">Há atualizações de acompanhamento pendentes. Conclua essas atualizações antes de restaurar a biblioteca.</string>
 </resources>

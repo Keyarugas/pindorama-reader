@@ -4,6 +4,7 @@ import app.cash.sqldelight.async.coroutines.awaitAsList
 import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.track.store.DelayedTrackingStore
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
@@ -17,6 +18,8 @@ import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.data.backup.restore.restorers.CategoriesRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.ui.reader.ReaderWriteGuard
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -60,6 +63,7 @@ class ProtectedRestoreDatabaseTest {
         val getChapters = GetChaptersByMangaId(chapters)
         val fetch = FetchInterval(getChapters)
         val store = InMemoryPreferenceStore()
+        val delayedTrackingStore = mockk<DelayedTrackingStore> { every { getItems() } returns emptyList() }
         fun manga(chapterRepository: ChapterRepository = chapters) = MangaRestorer(
             database, categories, GetMangaByUrlAndSourceId(mangaRepository), getChapters,
             UpdateManga(mangaRepository, fetch), GetTracks(tracks), InsertTrack(tracks), fetch,
@@ -70,6 +74,7 @@ class ProtectedRestoreDatabaseTest {
             manga(chapterRepository),
             ProtectedRestorePreferences(store),
             database,
+            delayedTrackingStore,
         )
     }
 
@@ -455,6 +460,7 @@ class ProtectedRestoreDatabaseTest {
                 target.manga(failingChapters),
                 ProtectedRestorePreferences(target.store),
                 target.database,
+                target.delayedTrackingStore,
             )
             val data = Backup((1..5).map { BackupManga(1, "/$it", isPrivate = true) }).apply {
                 backupCategories = listOf(BackupCategory("Synthetic"))

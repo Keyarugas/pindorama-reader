@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.backup.restore
 
 import dev.zacsweers.metro.Inject
+import eu.kanade.domain.track.store.DelayedTrackingStore
 import eu.kanade.tachiyomi.data.backup.BackupError
 import eu.kanade.tachiyomi.data.backup.BackupException
 import eu.kanade.tachiyomi.data.backup.create.protectedBackupOperation
@@ -18,6 +19,7 @@ class ProtectedBackupRestorer(
     private val manga: MangaRestorer,
     private val preferences: ProtectedRestorePreferences,
     private val database: Database,
+    private val delayedTrackingStore: DelayedTrackingStore,
 ) {
     /** Explicit, separate import. Never schedules tasks or changes security preferences. */
     internal suspend fun importVisualPreferences(prepared: PreparedProtectedRestore) = protectedBackupOperation {
@@ -35,6 +37,9 @@ class ProtectedBackupRestorer(
                 LibraryOperationCoordinator.shared.exclusive {
                     ProtectedRestorePreferences.validate(backup.backupPreferences)
                     currentCoroutineContext().ensureActive()
+                    if (delayedTrackingStore.getItems().isNotEmpty()) {
+                        throw BackupException(BackupError.PENDING_TRACKING)
+                    }
                     database.transaction {
                         if (options.categories) categories.restoreData(backup.backupCategories)
                         if (options.libraryEntries) {

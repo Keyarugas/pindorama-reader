@@ -1163,4 +1163,5 @@
     <string name="pindorama_restore_visual_failed">Display preference import did not complete. Review local display settings. The committed library data remains restored.</string>
     <string name="pindorama_reader_write_rejected">Reading changes could not be saved. Reopen the reader to refresh its data.</string>
     <string name="pindorama_migration_failed">Migration did not complete. Refresh the selected works and try again. Some changes may already have been applied.</string>
+    <string name="pindorama_restore_pending_tracking">There are pending tracking updates. Complete them before restoring the library.</string>
 </resources>

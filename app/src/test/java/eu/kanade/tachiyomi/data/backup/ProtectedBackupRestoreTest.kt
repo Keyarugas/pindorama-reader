@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.data.backup
 
 import android.content.SharedPreferences
 import app.cash.sqldelight.SuspendingTransactionWithoutReturn
+import eu.kanade.domain.track.store.DelayedTrackingStore
 import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.create.ProtectedBackupPayload
@@ -123,7 +124,13 @@ class ProtectedBackupRestoreTest {
         val manga = mockk<MangaRestorer>()
         val preferences = ProtectedRestorePreferences(store)
         val database = mockk<Database>()
-        val restorer = ProtectedBackupRestorer(categories, manga, preferences, database)
+        val restorer = ProtectedBackupRestorer(
+            categories,
+            manga,
+            preferences,
+            database,
+            mockk<DelayedTrackingStore> { every { getItems() } returns emptyList() },
+        )
         init {
             // Control-flow tests only. Actual rollback is verified with SQLite in ProtectedRestoreDatabaseTest.
             coEvery { database.transaction(any(), any()) } coAnswers {
