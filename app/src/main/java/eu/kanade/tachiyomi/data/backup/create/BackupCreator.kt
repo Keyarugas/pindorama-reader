@@ -32,6 +32,7 @@ import logcat.LogPriority
 import okio.buffer
 import okio.gzip
 import okio.sink
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
@@ -97,7 +98,26 @@ class BackupCreator(
         ProtectedBackupPayload.encode(buildBackup(options, allowPrivate = true), parser)
 
     private suspend fun buildBackup(options: BackupOptions, allowPrivate: Boolean): Backup {
-        // Use the same snapshot for the policy and serialization. Never consult UI visibility.
+        val (backupManga, backupCategories) = if (options.libraryEntries || options.categories) {
+            LibraryOperationCoordinator.shared.operation { createLibrarySnapshot(options, allowPrivate) }
+        } else {
+            emptyList<BackupManga>() to emptyList<BackupCategory>()
+        }
+        return Backup(
+            backupManga = backupManga,
+            backupCategories = backupCategories,
+            backupSources = backupSources(backupManga),
+            backupPreferences = backupAppPreferences(options),
+            backupExtensionStores = backupExtensionStores(options),
+            backupSourcePreferences = backupSourcePreferences(options),
+        )
+    }
+
+    private suspend fun createLibrarySnapshot(
+        options: BackupOptions,
+        allowPrivate: Boolean,
+    ): Pair<List<BackupManga>, List<BackupCategory>> {
+        // Use the same admitted collection for policy and conversion; never consult UI visibility.
         val mangas = if (options.libraryEntries) {
             getFavorites.await() + if (options.readEntries) mangaRepository.getReadMangaNotInLibrary() else emptyList()
         } else {
@@ -105,14 +125,7 @@ class BackupCreator(
         }
         if (!allowPrivate) ConventionalBackupPolicy.check(mangas, options)
         val backupManga = backupMangas(mangas, options)
-        return Backup(
-            backupManga = backupManga,
-            backupCategories = backupCategories(options),
-            backupSources = backupSources(backupManga),
-            backupPreferences = backupAppPreferences(options),
-            backupExtensionStores = backupExtensionStores(options),
-            backupSourcePreferences = backupSourcePreferences(options),
-        )
+        return backupManga to backupCategories(options)
     }
 
     private suspend fun publishConventional(uri: Uri, byteArray: ByteArray): String {
