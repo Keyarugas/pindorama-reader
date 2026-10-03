@@ -5,10 +5,14 @@ import android.net.Uri
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
+import eu.kanade.domain.track.store.DelayedTrackingStore
 import eu.kanade.tachiyomi.data.backup.BackupDecoder
+import eu.kanade.tachiyomi.data.backup.BackupError
+import eu.kanade.tachiyomi.data.backup.BackupException
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import eu.kanade.tachiyomi.data.backup.BackupOperation
 import eu.kanade.tachiyomi.data.backup.backupDiagnostic
+import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionStore
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
@@ -19,12 +23,14 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionStoreRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import eu.kanade.tachiyomi.data.download.DownloadCache
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import logcat.LogPriority
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.Database
 import java.io.File
@@ -49,6 +55,7 @@ class BackupRestorer(
     private val extensionStoreRestorer: ExtensionStoreRestorer,
     private val mangaRestorer: MangaRestorer,
     private val backupDecoder: BackupDecoder,
+    private val delayedTrackingStore: DelayedTrackingStore,
 ) {
 
     @AssistedFactory
@@ -64,15 +71,6 @@ class BackupRestorer(
         val startTime = System.currentTimeMillis()
 
         restoreFromFile(uri, options)
-
-        // Invalidate download cache to ensure UI reflects any restored downloads
-        if (options.libraryEntries) {
-            try {
-                downloadCache.invalidateCache()
-            } catch (e: Exception) {
-                logcat(LogPriority.ERROR) { backupDiagnostic(BackupOperation.INVALIDATE_CACHE, e) }
-            }
-        }
 
         val time = System.currentTimeMillis() - startTime
 
@@ -106,6 +104,23 @@ class BackupRestorer(
             restoreAmount += 1
         }
 
+        if (options.libraryEntries || options.categories) {
+            try {
+                LibraryOperationCoordinator.shared.exclusive {
+                    if (delayedTrackingStore.getItems().isNotEmpty()) {
+                        throw BackupException(BackupError.PENDING_TRACKING)
+                    }
+                    applyBackup(backup, options)
+                }
+            } catch (_: LibraryOperationCoordinator.Unavailable) {
+                throw BackupException(BackupError.BUSY)
+            }
+        } else {
+            applyBackup(backup, options)
+        }
+    }
+
+    private suspend fun applyBackup(backup: Backup, options: RestoreOptions) {
         coroutineScope {
             val restoreCategoriesJob = if (options.categories) {
                 restoreCategories(backup.backupCategories)
@@ -134,6 +149,16 @@ class BackupRestorer(
             }
 
             // TODO: optionally trigger online library + tracker update
+        }
+        // Invalidate download cache to ensure UI reflects any restored downloads
+        if (options.libraryEntries) {
+            try {
+                downloadCache.invalidateCache()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR) { backupDiagnostic(BackupOperation.INVALIDATE_CACHE, e) }
+            }
         }
     }
 
