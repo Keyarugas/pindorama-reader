@@ -137,8 +137,7 @@ class MangaViewModel(
         fun create(mangaId: Long, isFromSource: Boolean): MangaViewModel
     }
 
-    suspend fun togglePrivacy(): Boolean {
-        val generation = LibraryOperationCoordinator.shared.generation
+    suspend fun togglePrivacy(generation: Long): Boolean {
         val manga = successState?.manga ?: return false
         return when (val result = toggleMangaPrivacy.await(manga, PrivateContentSessionManager.session, generation)) {
             ToggleMangaPrivacy.Result.Unchanged -> false
@@ -683,12 +682,14 @@ class MangaViewModel(
      * @param read whether to mark chapters as read or unread.
      */
     fun markChaptersRead(chapters: List<Chapter>, read: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         toggleAllSelection(false)
         if (chapters.isEmpty()) return
         viewModelScope.launchIO {
             setReadStatus.await(
                 read = read,
                 chapters = chapters.toTypedArray(),
+                generation = generation,
             )
 
             if (!read || successState?.hasLoggedInTrackers == false || autoTrackState == AutoTrackState.NEVER) {
@@ -757,8 +758,9 @@ class MangaViewModel(
      * @param chapters the list of chapters to bookmark.
      */
     fun bookmarkChapters(chapters: List<Chapter>, bookmarked: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launchIO {
-            setBookmarkStatus.await(bookmarked, *chapters.toTypedArray())
+            setBookmarkStatus.await(bookmarked, *chapters.toTypedArray(), generation = generation)
         }
         toggleAllSelection(false)
     }

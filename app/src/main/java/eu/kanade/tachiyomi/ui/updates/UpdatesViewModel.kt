@@ -52,6 +52,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import logcat.LogPriority
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.system.logcat
@@ -299,6 +300,7 @@ class UpdatesViewModel(
      * @param read whether to mark chapters as read or unread.
      */
     fun markUpdatesRead(updates: List<UpdatesItem>, read: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launchIO {
             setReadStatus.await(
                 read = read,
@@ -311,6 +313,7 @@ class UpdatesViewModel(
                         )
                     }
                     .toTypedArray(),
+                generation = generation,
             )
         }
         toggleAllSelection(false)
@@ -321,6 +324,7 @@ class UpdatesViewModel(
      * @param updates the list of chapters to bookmark.
      */
     fun bookmarkUpdates(updates: List<UpdatesItem>, bookmark: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launchIO {
             setBookmarkStatus.await(
                 bookmarked = bookmark,
@@ -331,6 +335,7 @@ class UpdatesViewModel(
                         url = it.update.chapterUrl,
                     )
                 }.toTypedArray(),
+                generation = generation,
             )
         }
         toggleAllSelection(false)

@@ -546,14 +546,10 @@ class LibraryViewModel(
      * Marks mangas' chapters read status.
      */
     fun markReadSelection(read: Boolean) {
-        val selection = selectedManga
+        val generation = LibraryOperationCoordinator.shared.generation
+        val selection = selectedManga.toList()
         viewModelScope.launchNonCancellable {
-            selection.forEach { manga ->
-                setReadStatus.await(
-                    manga = manga,
-                    read = read,
-                )
-            }
+            setReadStatus.awaitAll(selection, read, generation)
         }
         clearSelection()
     }
@@ -565,8 +561,7 @@ class LibraryViewModel(
      * @param deleteFromLibrary whether to delete manga from library.
      * @param deleteChapters whether to delete downloaded chapters.
      */
-    fun removeMangas(mangas: List<Manga>, deleteFromLibrary: Boolean, deleteChapters: Boolean) {
-        val generation = LibraryOperationCoordinator.shared.generation
+    fun removeMangas(mangas: List<Manga>, deleteFromLibrary: Boolean, deleteChapters: Boolean, generation: Long) {
         viewModelScope.launchNonCancellable {
             removeLibraryMangas.await(mangas, deleteFromLibrary, deleteChapters, generation)
         }
@@ -729,7 +724,8 @@ class LibraryViewModel(
     }
 
     fun openDeleteMangaDialog() {
-        dialog.update { Dialog.DeleteManga(selectedManga) }
+        val generation = LibraryOperationCoordinator.shared.generation
+        dialog.update { Dialog.DeleteManga(selectedManga.toList(), generation) }
     }
 
     fun closeDialog() {
@@ -744,7 +740,7 @@ class LibraryViewModel(
             val generation: Long,
         ) : Dialog
 
-        data class DeleteManga(val manga: List<Manga>) : Dialog
+        data class DeleteManga(val manga: List<Manga>, val generation: Long) : Dialog
     }
 
     @Immutable

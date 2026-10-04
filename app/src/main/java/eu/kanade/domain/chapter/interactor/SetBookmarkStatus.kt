@@ -10,9 +10,12 @@ import tachiyomi.domain.chapter.repository.ChapterRepository
 class SetBookmarkStatus(
     private val chapterRepository: ChapterRepository,
 ) {
-    suspend fun await(bookmarked: Boolean, vararg chapters: Chapter) {
+    suspend fun await(
+        bookmarked: Boolean,
+        vararg chapters: Chapter,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ) {
         val coordinator = LibraryOperationCoordinator.shared
-        val generation = coordinator.generation
         coordinator.operation {
             if (generation != coordinator.generation) return@operation
             val updates = chapters.distinctBy { it.id }.mapNotNull { expected ->

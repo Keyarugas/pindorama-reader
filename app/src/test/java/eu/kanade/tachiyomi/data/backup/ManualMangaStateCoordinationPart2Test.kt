@@ -12,6 +12,7 @@ import eu.kanade.domain.manga.interactor.SetExcludedScanlators
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.ui.library.LibraryViewModel
 import eu.kanade.tachiyomi.ui.manga.notes.MangaNotesScreen
 import io.mockk.coEvery
 import io.mockk.every
@@ -391,6 +392,19 @@ class ManualMangaStateCoordinationPart2Test {
             assertEquals(1, t.resets)
             assertEquals(0L, t.current().viewerFlags)
             assertEquals(0L, t.mangas.getMangaById(t.second.id).viewerFlags)
+        }
+    }
+
+    @Test
+    fun `delete dialog retains selection generation until confirmation`() = runBlocking {
+        database { t ->
+            val dialog = LibraryViewModel.Dialog.DeleteManga(listOf(t.manga, t.second), coordinator.generation)
+            coordinator.exclusive { t.mangas.update(MangaUpdate(t.manga.id, notes = "restored")) }
+            t.remove.await(dialog.manga, true, true, dialog.generation)
+            t.assertNoEffects()
+            assertTrue(t.current().favorite)
+            assertTrue(t.mangas.getMangaById(t.second.id).favorite)
+            assertEquals("restored", t.current().notes)
         }
     }
 

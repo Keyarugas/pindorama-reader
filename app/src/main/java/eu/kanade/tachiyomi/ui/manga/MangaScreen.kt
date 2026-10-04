@@ -170,9 +170,10 @@ class MangaScreen(
                 navigator.push(MigrationConfigScreen(successState.manga.id))
             }.takeIf { successState.manga.favorite },
             onTogglePrivacy = {
+                val generation = LibraryOperationCoordinator.shared.generation
                 changingPrivacy = true
                 scope.launch {
-                    if (viewModel.togglePrivacy()) navigator.pop()
+                    if (viewModel.togglePrivacy(generation)) navigator.pop()
                     changingPrivacy = false
                 }
             },

@@ -346,6 +346,27 @@ class ManualMangaStateCoordinationTest {
     }
 
     @Test
+    fun `privacy action expires while dispatched before interactor entry`() = runBlocking {
+        database { t ->
+            val generation = coordinator.generation
+            val scheduled = CompletableDeferred<Unit>()
+            val enterInteractor = CompletableDeferred<Unit>()
+            val call = async {
+                scheduled.complete(Unit)
+                enterInteractor.await()
+                t.privacy.await(t.manga, t.session, generation)
+            }
+            scheduled.await()
+            coordinator.exclusive { t.mangas.update(MangaUpdate(t.manga.id, isPrivate = true)) }
+            enterInteractor.complete(Unit)
+            assertEquals(ToggleMangaPrivacy.Result.Unchanged, call.await())
+            assertEquals(0, t.reads)
+            assertTrue(t.updates.isEmpty())
+            assertTrue(t.current().isPrivate)
+        }
+    }
+
+    @Test
     fun `old generation cannot change restored state`() = runBlocking {
         database { t ->
             val generation = coordinator.generation

@@ -27,6 +27,7 @@ import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.repository.MangaRepository
 
 /** SQLite application and real manual interactors; download deletion is synthetic. */
 class ManualChapterCoordinationTest {
@@ -35,6 +36,7 @@ class ManualChapterCoordinationTest {
         SNAPSHOT,
         MANGA_ID,
         MANGA,
+        BATCH,
         NOTIFICATION_URLS,
         BOOKMARK,
     }
@@ -47,6 +49,7 @@ class ManualChapterCoordinationTest {
         lateinit var manga: Manga
         lateinit var chapter: Chapter
         var reads = 0
+        var mangaReads = 0
         var writes = 0
         var deletes = 0
         var deleted = emptyList<Chapter>()
@@ -79,7 +82,13 @@ class ManualChapterCoordinationTest {
                 writes++
             }
         }
-        val read = SetReadStatus(preferences, delete, mangas, repository)
+        val mangaRepository = object : MangaRepository by mangas {
+            override suspend fun getMangaByUrlAndSourceId(url: String, sourceId: Long): Manga? {
+                mangaReads++
+                return mangas.getMangaByUrlAndSourceId(url, sourceId)
+            }
+        }
+        val read = SetReadStatus(preferences, delete, mangaRepository, repository)
         val bookmark = SetBookmarkStatus(repository)
 
         init {
@@ -108,25 +117,29 @@ class ManualChapterCoordinationTest {
             ).single()
         }
 
-        suspend fun execute(kind: Kind) {
+        suspend fun execute(kind: Kind, generation: Long = LibraryOperationCoordinator.shared.generation) {
             when (kind) {
                 Kind.SNAPSHOT -> {
-                    result = read.await(true, chapter)
+                    result = read.await(true, chapter, generation = generation)
                 }
                 Kind.MANGA_ID -> {
-                    result = read.await(manga.id, true)
+                    result = read.await(manga.id, true, generation)
                 }
                 Kind.MANGA -> {
-                    result = read.await(manga, true)
+                    result = read.await(manga, true, generation)
+                }
+                Kind.BATCH -> {
+                    result = read.awaitAll(listOf(manga), true, generation)
                 }
                 Kind.NOTIFICATION_URLS -> {
                     result = read.await(
                         true,
                         manga.id,
                         arrayOf(chapter.url),
+                        generation,
                     )
                 }
-                Kind.BOOKMARK -> bookmark.await(true, chapter)
+                Kind.BOOKMARK -> bookmark.await(true, chapter, generation = generation)
             }
         }
 
@@ -157,6 +170,95 @@ class ManualChapterCoordinationTest {
             val target = Target(AppBindings.providesDatabase(driver))
             target.seed()
             block(target)
+        }
+    }
+
+    @Test
+    fun `action generation survives dispatch before entering manual interactor`() = runBlocking {
+        for (kind in Kind.entries) {
+            database { t ->
+                val generation = coordinator.generation
+                val scheduled = CompletableDeferred<Unit>()
+                val enterInteractor = CompletableDeferred<Unit>()
+                val call = async {
+                    scheduled.complete(Unit)
+                    enterInteractor.await()
+                    t.execute(kind, generation)
+                }
+                scheduled.await()
+                coordinator.exclusive {
+                    t.chapters.update(ChapterUpdate(t.chapter.id, bookmark = true, lastPageRead = 9))
+                }
+                val restored = t.current()
+                enterInteractor.complete(Unit)
+                call.await()
+                assertEquals(0, t.reads)
+                assertEquals(0, t.mangaReads)
+                assertEquals(0, t.writes)
+                assertEquals(0, t.deletes)
+                assertEquals(restored, t.current())
+            }
+        }
+    }
+
+    @Test
+    fun `library read batch keeps restore outside all items and derived deletes`() = runBlocking {
+        database { t ->
+            val second = t.mangas.insertNetworkManga(
+                listOf(Manga.create().copy(source = 1, url = "/second", title = "second")),
+            ).single()
+            val secondChapter = t.chapters.addAll(
+                listOf(Chapter.create().copy(mangaId = second.id, url = "/second-chapter", name = "second")),
+            ).single()
+            val betweenItems = CompletableDeferred<Unit>()
+            val finishReads = CompletableDeferred<Unit>()
+            val deleting = CompletableDeferred<Unit>()
+            val finishDeletes = CompletableDeferred<Unit>()
+            t.onRead = {
+                if (t.reads == 2) {
+                    betweenItems.complete(Unit)
+                    finishReads.await()
+                }
+            }
+            t.onDelete = {
+                deleting.complete(Unit)
+                finishDeletes.await()
+            }
+            val generation = coordinator.generation
+            val call = async(start = CoroutineStart.UNDISPATCHED) {
+                t.read.awaitAll(listOf(t.manga, second), true, generation)
+            }
+            betweenItems.await()
+            var entered = false
+            val exclusive = launch(start = CoroutineStart.UNDISPATCHED) {
+                coordinator.exclusive { entered = true }
+            }
+            assertFalse(entered)
+            finishReads.complete(Unit)
+            deleting.await()
+            assertFalse(entered)
+            assertTrue(t.current().read)
+            assertTrue(t.chapters.getChapterById(secondChapter.id)!!.read)
+            finishDeletes.complete(Unit)
+            assertEquals(SetReadStatus.Result.Success, call.await())
+            exclusive.join()
+            assertTrue(entered)
+            assertEquals(1, t.writes)
+            assertEquals(2, t.deletes)
+        }
+    }
+
+    @Test
+    fun `library read batch ignores replaced or missing manga identities`() = runBlocking {
+        database { t ->
+            val generation = coordinator.generation
+            val result = t.read.awaitAll(
+                listOf(t.manga.copy(source = 2), t.manga.copy(id = t.manga.id + 1, url = "/absent")),
+                true,
+                generation,
+            )
+            assertEquals(SetReadStatus.Result.NoChapters, result)
+            t.assertUntouched()
         }
     }
 

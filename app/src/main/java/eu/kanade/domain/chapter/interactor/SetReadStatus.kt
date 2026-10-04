@@ -22,7 +22,11 @@ class SetReadStatus(
     private val chapterRepository: ChapterRepository,
 ) {
 
-    suspend fun await(read: Boolean, vararg chapters: Chapter): Result = apply(read) {
+    suspend fun await(
+        read: Boolean,
+        vararg chapters: Chapter,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) {
         chapters.distinctBy { it.id }.mapNotNull { expected ->
             chapterRepository.getChapterById(expected.id)?.takeIf {
                 it.id == expected.id && it.mangaId == expected.mangaId && it.url == expected.url
@@ -30,17 +34,37 @@ class SetReadStatus(
         }
     }
 
-    suspend fun await(mangaId: Long, read: Boolean): Result = apply(read) {
+    suspend fun await(
+        mangaId: Long,
+        read: Boolean,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) {
         chapterRepository.getChapterByMangaId(mangaId)
     }
 
-    suspend fun await(manga: Manga, read: Boolean): Result = await(manga.id, read)
+    suspend fun await(
+        manga: Manga,
+        read: Boolean,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) { loadCurrent(manga) }
+
+    suspend fun awaitAll(mangas: List<Manga>, read: Boolean, generation: Long): Result = apply(read, generation) {
+        mangas.distinctBy { it.id }.flatMap { loadCurrent(it) }
+    }
+
+    private suspend fun loadCurrent(expected: Manga): List<Chapter> {
+        val current = mangaRepository.getMangaByUrlAndSourceId(expected.url, expected.source)
+            ?.takeIf { it.id == expected.id && it.source == expected.source && it.url == expected.url }
+            ?: return emptyList()
+        return chapterRepository.getChapterByMangaId(current.id)
+    }
 
     suspend fun await(
         read: Boolean,
         mangaId: Long,
         chapterUrls: Array<String>,
-    ): Result = apply(read) {
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) {
         chapterUrls.distinct().mapNotNull { url ->
             chapterRepository.getChapterByUrlAndMangaId(url, mangaId)?.takeIf {
                 it.mangaId == mangaId && it.url == url
@@ -48,9 +72,8 @@ class SetReadStatus(
         }
     }
 
-    private suspend fun apply(read: Boolean, loadCurrent: suspend () -> List<Chapter>): Result {
+    private suspend fun apply(read: Boolean, generation: Long, loadCurrent: suspend () -> List<Chapter>): Result {
         val coordinator = LibraryOperationCoordinator.shared
-        val generation = coordinator.generation
         return withNonCancellableContext {
             coordinator.operation {
                 if (generation != coordinator.generation) return@operation Result.NoChapters

@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.runBlocking
 import mihon.app.di.appGraph
 import tachiyomi.core.common.Constants
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.chapter.model.Chapter
@@ -182,8 +183,9 @@ class NotificationReceiver : BroadcastReceiver() {
      * @param mangaId id of manga
      */
     private fun markAsRead(chapterUrls: Array<String>, mangaId: Long) {
+        val generation = LibraryOperationCoordinator.shared.generation
         launchIO {
-            setReadStatus.await(read = true, mangaId = mangaId, chapterUrls = chapterUrls)
+            setReadStatus.await(read = true, mangaId = mangaId, chapterUrls = chapterUrls, generation = generation)
         }
     }
 
