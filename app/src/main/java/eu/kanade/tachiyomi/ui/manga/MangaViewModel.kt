@@ -20,6 +20,7 @@ import eu.kanade.core.preference.asState
 import eu.kanade.core.util.addOrRemove
 import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
+import eu.kanade.domain.chapter.interactor.SetBookmarkStatus
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.GetExcludedScanlators
 import eu.kanade.domain.manga.interactor.SetExcludedScanlators
@@ -73,9 +74,7 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
-import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
-import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.chapter.service.calculateChapterGap
 import tachiyomi.domain.chapter.service.getChapterSort
@@ -114,7 +113,7 @@ class MangaViewModel(
     private val setMangaChapterFlags: SetMangaChapterFlags,
     private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags,
     private val setReadStatus: SetReadStatus,
-    private val updateChapter: UpdateChapter,
+    private val setBookmarkStatus: SetBookmarkStatus,
     private val updateManga: UpdateManga,
     private val getCategories: GetCategories,
     private val getTracks: GetTracks,
@@ -824,10 +823,7 @@ class MangaViewModel(
      */
     fun bookmarkChapters(chapters: List<Chapter>, bookmarked: Boolean) {
         viewModelScope.launchIO {
-            chapters
-                .filterNot { it.bookmark == bookmarked }
-                .map { ChapterUpdate(id = it.id, bookmark = bookmarked) }
-                .let { updateChapter.awaitAll(it) }
+            setBookmarkStatus.await(bookmarked, *chapters.toTypedArray())
         }
         toggleAllSelection(false)
     }

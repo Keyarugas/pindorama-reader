@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.net.toUri
 import dev.zacsweers.metro.Inject
+import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
@@ -23,13 +24,9 @@ import mihon.app.di.appGraph
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.chapter.interactor.GetChapter
-import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
-import tachiyomi.domain.chapter.model.toChapterUpdate
-import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import eu.kanade.tachiyomi.BuildConfig.APPLICATION_ID as ID
 
@@ -44,13 +41,9 @@ class NotificationReceiver : BroadcastReceiver() {
 
     @Inject private lateinit var getChapter: GetChapter
 
-    @Inject private lateinit var updateChapter: UpdateChapter
+    @Inject private lateinit var setReadStatus: SetReadStatus
 
     @Inject private lateinit var downloadManager: DownloadManager
-
-    @Inject private lateinit var downloadPreferences: DownloadPreferences
-
-    @Inject private lateinit var sourceManager: SourceManager
 
     override fun onReceive(context: Context, intent: Intent) {
         context.appGraph.inject(this)
@@ -190,21 +183,7 @@ class NotificationReceiver : BroadcastReceiver() {
      */
     private fun markAsRead(chapterUrls: Array<String>, mangaId: Long) {
         launchIO {
-            val toUpdate = chapterUrls.mapNotNull { getChapter.await(it, mangaId) }
-                .map {
-                    val chapter = it.copy(read = true)
-                    if (downloadPreferences.removeAfterMarkedAsRead.get()) {
-                        val manga = getManga.await(mangaId)
-                        if (manga != null) {
-                            val source = sourceManager.get(manga.source)
-                            if (source != null) {
-                                downloadManager.deleteChapters(listOf(it), manga, source)
-                            }
-                        }
-                    }
-                    chapter.toChapterUpdate()
-                }
-            updateChapter.awaitAll(toUpdate)
+            setReadStatus.await(read = true, mangaId = mangaId, chapterUrls = chapterUrls)
         }
     }
 
