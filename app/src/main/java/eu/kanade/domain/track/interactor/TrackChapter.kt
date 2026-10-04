@@ -2,6 +2,7 @@ package eu.kanade.domain.track.interactor
 
 import android.content.Context
 import dev.zacsweers.metro.Inject
+import eu.kanade.domain.track.model.hasSameAssociation
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.model.toDomainTrack
 import eu.kanade.domain.track.service.DelayedTrackingUpdateJob
@@ -15,6 +16,7 @@ import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
+import tachiyomi.domain.track.model.Track
 
 @Inject
 class TrackChapter(
@@ -24,13 +26,21 @@ class TrackChapter(
     private val delayedTrackingStore: DelayedTrackingStore,
 ) {
 
-    suspend fun await(context: Context, mangaId: Long, chapterNumber: Double, setupJobOnFailure: Boolean = true) {
+    suspend fun await(
+        context: Context,
+        mangaId: Long,
+        chapterNumber: Double,
+        setupJobOnFailure: Boolean = true,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+        expectedTracks: List<Track>? = null,
+    ) {
         val coordinator = LibraryOperationCoordinator.shared
-        val generation = coordinator.generation
         withNonCancellableContext {
             coordinator.operation {
                 if (generation != coordinator.generation) return@operation
-                val tracks = getTracks.await(mangaId)
+                val tracks = getTracks.await(mangaId).filter { current ->
+                    expectedTracks == null || expectedTracks.any { current.hasSameAssociation(it) }
+                }
                 if (tracks.isEmpty()) return@operation
 
                 tracks.mapNotNull { track ->

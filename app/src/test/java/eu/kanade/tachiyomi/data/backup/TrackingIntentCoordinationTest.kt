@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.data.backup
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.domain.track.interactor.RefreshTracks
+import eu.kanade.domain.track.interactor.RegisterTracking
 import eu.kanade.domain.track.interactor.SyncChapterProgressWithTrack
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.tachiyomi.data.track.BaseTracker
@@ -37,6 +38,7 @@ import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.history.interactor.GetHistory
+import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
@@ -73,6 +75,8 @@ class TrackingIntentCoordinationTest {
         var mangaReads = 0
         var matched: Manga? = null
         var remote: suspend () -> Unit = {}
+        var beforeMatch: suspend () -> Unit = {}
+        var beforeSearch: suspend () -> Unit = {}
         var remoteSync: suspend () -> Unit = {}
         var beforeInsert: suspend (Int) -> Unit = {}
         var beforeChapters: suspend () -> Unit = {}
@@ -122,6 +126,7 @@ class TrackingIntentCoordinationTest {
             GetHistory(HistoryRepositoryImpl(database)),
             mangaRepository,
         )
+        val register = RegisterTracking(GetManga(mangas), trackingRepository, manager, add)
         val refresh = RefreshTracks(GetTracks(trackingRepository), manager, insert, sync)
 
         init {
@@ -141,8 +146,13 @@ class TrackingIntentCoordinationTest {
             }
             coEvery { service.match(any()) } coAnswers {
                 matches++
+                beforeMatch()
                 matched = firstArg()
                 item()
+            }
+            coEvery { service.search(any()) } coAnswers {
+                beforeSearch()
+                listOf(item())
             }
             coEvery { service.update(any(), any()) } coAnswers {
                 remoteSync()
@@ -447,6 +457,90 @@ class TrackingIntentCoordinationTest {
             assertTrue(call.isCancelled)
             assertEquals(0, t.inserts)
             coordinator.exclusive { }
+        }
+    }
+
+    @Test
+    fun `match response from before restore cannot bind or sync`() = runBlocking {
+        database { t ->
+            val session = t.register.loadSession(t.manga.id, t.manga.source, 1, coordinator.generation)!!
+            val requested = CompletableDeferred<Unit>()
+            val response = CompletableDeferred<Unit>()
+            t.beforeMatch = {
+                requested.complete(Unit)
+                response.await()
+            }
+            val call = async(start = CoroutineStart.UNDISPATCHED) { t.register.matchAndBind(session) }
+            requested.await()
+            // Remote matching owns no lease: restore can publish while it waits.
+            coordinator.exclusive { }
+            response.complete(Unit)
+            assertEquals(null, call.await())
+            assertEquals(0, t.requests)
+            assertEquals(0, t.inserts)
+            assertEquals(0, t.chapterWrites)
+            assertEquals(t.track, t.tracks.getTracksByMangaId(t.manga.id).single())
+        }
+    }
+
+    @Test
+    fun `search response and retained selection keep their pre-request generation`() = runBlocking {
+        database { t ->
+            val session = t.register.loadSession(t.manga.id, t.manga.source, 1, coordinator.generation)!!
+            val requested = CompletableDeferred<Unit>()
+            val response = CompletableDeferred<Unit>()
+            t.beforeSearch = {
+                requested.complete(Unit)
+                response.await()
+            }
+            val call = async(start = CoroutineStart.UNDISPATCHED) { t.register.search(session, "synthetic") }
+            requested.await()
+            coordinator.exclusive { }
+            response.complete(Unit)
+            assertEquals(null, call.await())
+            assertFalse(t.register.bind(session, t.item()))
+            assertEquals(0, t.requests)
+            assertEquals(0, t.inserts)
+            assertEquals(0, t.chapterWrites)
+        }
+        database { t ->
+            val session = t.register.loadSession(t.manga.id, t.manga.source, 1, coordinator.generation)!!
+            val selected = t.register.search(session, "synthetic")!!.single()
+            coordinator.exclusive { }
+            assertFalse(t.register.bind(session, selected))
+            assertEquals(0, t.requests)
+            assertEquals(0, t.inserts)
+            assertEquals(0, t.chapterWrites)
+        }
+    }
+
+    @Test
+    fun `fresh registration binds and syncs under one nested lease`() = runBlocking {
+        database { t ->
+            val session = t.register.loadSession(t.manga.id, t.manga.source, 1, coordinator.generation)!!
+            val begin = CompletableDeferred<Unit>()
+            val completed = CompletableDeferred<Unit>()
+            val finish = CompletableDeferred<Unit>()
+            val outer = launch(start = CoroutineStart.UNDISPATCHED) {
+                coordinator.operation {
+                    begin.await()
+                    assertTrue(t.register.bind(session, t.item()))
+                    completed.complete(Unit)
+                    finish.await()
+                }
+            }
+            var entered = false
+            val exclusive = launch(start = CoroutineStart.UNDISPATCHED) {
+                coordinator.exclusive { entered = true }
+            }
+            begin.complete(Unit)
+            completed.await()
+            assertFalse(entered)
+            assertEquals(1, t.requests)
+            assertTrue(t.chapters.getChapterByMangaId(t.manga.id).single().read)
+            finish.complete(Unit)
+            outer.join()
+            exclusive.join()
         }
     }
 }

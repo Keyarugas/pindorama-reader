@@ -21,7 +21,6 @@ import eu.kanade.core.util.addOrRemove
 import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.chapter.interactor.SetBookmarkStatus
-import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.AddMangaToLibrary
 import eu.kanade.domain.manga.interactor.GetExcludedScanlators
 import eu.kanade.domain.manga.interactor.RemoveMangaFromLibrary
@@ -30,8 +29,7 @@ import eu.kanade.domain.manga.interactor.ToggleMangaPrivacy
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.chaptersFiltered
 import eu.kanade.domain.manga.model.downloadedFilter
-import eu.kanade.domain.track.interactor.RefreshTracks
-import eu.kanade.domain.track.interactor.TrackChapter
+import eu.kanade.domain.track.interactor.TrackReadChapters
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.presentation.manga.DownloadAction
@@ -41,6 +39,7 @@ import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
+import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
@@ -101,7 +100,7 @@ class MangaViewModel(
     trackPreferences: TrackPreferences,
     readerPreferences: ReaderPreferences,
     private val trackerManager: TrackerManager,
-    private val trackChapter: TrackChapter,
+    private val trackReadChapters: TrackReadChapters,
     private val downloadManager: DownloadManager,
     private val downloadCache: DownloadCache,
     private val getMangaAndChapters: GetMangaWithChapters,
@@ -111,7 +110,6 @@ class MangaViewModel(
     private val setExcludedScanlators: SetExcludedScanlators,
     private val setMangaChapterFlags: SetMangaChapterFlags,
     private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags,
-    private val setReadStatus: SetReadStatus,
     private val setBookmarkStatus: SetBookmarkStatus,
     private val updateManga: UpdateManga,
     private val toggleMangaPrivacy: ToggleMangaPrivacy,
@@ -123,7 +121,6 @@ class MangaViewModel(
     private val filterChaptersForDownload: FilterChaptersForDownload,
     private val updateMangaFromRemote: UpdateMangaFromRemote,
     private val sourceManager: SourceManager,
-    private val refreshTracks: RefreshTracks,
     private val removeMangaFromLibrary: RemoveMangaFromLibrary,
 ) : ViewModel() {
 
@@ -683,30 +680,27 @@ class MangaViewModel(
      */
     fun markChaptersRead(chapters: List<Chapter>, read: Boolean) {
         val generation = LibraryOperationCoordinator.shared.generation
+        val manga = successState?.manga ?: return
+        val autoTrack = autoTrackState
+        val offerTracking = read && successState?.hasLoggedInTrackers != false && autoTrack != AutoTrackState.NEVER
         toggleAllSelection(false)
         if (chapters.isEmpty()) return
         viewModelScope.launchIO {
-            setReadStatus.await(
-                read = read,
-                chapters = chapters.toTypedArray(),
-                generation = generation,
-            )
-
-            if (!read || successState?.hasLoggedInTrackers == false || autoTrackState == AutoTrackState.NEVER) {
-                return@launchIO
-            }
-
-            refreshTrackers()
-
-            val tracks = getTracks.await(mangaId)
-            val maxChapterNumber = chapters.maxOf { it.chapterNumber }
-            val shouldPromptTrackingUpdate = tracks.any { track -> maxChapterNumber > track.lastChapterRead }
-
-            if (!shouldPromptTrackingUpdate) return@launchIO
-            if (autoTrackState == AutoTrackState.ALWAYS) {
-                trackChapter.await(context, mangaId, maxChapterNumber)
-                withUIContext {
-                    context.toast(context.stringResource(MR.strings.trackers_updated_summary, maxChapterNumber.toInt()))
+            val prepared =
+                trackReadChapters.prepare(manga, chapters, read, offerTracking, generation) ?: return@launchIO
+            showTrackingErrors(prepared.failures)
+            if (!prepared.needsUpdate) return@launchIO
+            val intent = prepared.intent
+            val maxChapterNumber = prepared.chapterNumber
+            if (autoTrack == AutoTrackState.ALWAYS) {
+                if (trackReadChapters.confirm(context, intent)) {
+                    withUIContext {
+                        if (generation == LibraryOperationCoordinator.shared.generation) {
+                            context.toast(
+                                context.stringResource(MR.strings.trackers_updated_summary, maxChapterNumber.toInt()),
+                            )
+                        }
+                    }
                 }
                 return@launchIO
             }
@@ -717,15 +711,14 @@ class MangaViewModel(
                 duration = SnackbarDuration.Short,
                 withDismissAction = true,
             )
-
             if (result == SnackbarResult.ActionPerformed) {
-                trackChapter.await(context, mangaId, maxChapterNumber)
+                trackReadChapters.confirm(context, intent)
             }
         }
     }
 
-    private suspend fun refreshTrackers() {
-        refreshTracks.await(mangaId)
+    private suspend fun showTrackingErrors(failures: List<Pair<Tracker?, Throwable>>) {
+        failures
             .filter { it.first != null }
             .forEach { (track, e) ->
                 logcat(LogPriority.ERROR, e) {

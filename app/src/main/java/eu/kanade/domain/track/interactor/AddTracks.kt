@@ -32,9 +32,13 @@ class AddTracks(
 ) {
 
     // TODO: update all trackers based on common data
-    suspend fun bind(tracker: Tracker, item: Track, mangaId: Long) {
+    suspend fun bind(
+        tracker: Tracker,
+        item: Track,
+        mangaId: Long,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ) {
         val coordinator = LibraryOperationCoordinator.shared
-        val generation = coordinator.generation
         withNonCancellableContext {
             coordinator.operation {
                 if (generation != coordinator.generation) return@operation

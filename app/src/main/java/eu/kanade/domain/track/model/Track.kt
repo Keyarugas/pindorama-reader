@@ -3,6 +3,10 @@ package eu.kanade.domain.track.model
 import tachiyomi.domain.track.model.Track
 import eu.kanade.tachiyomi.data.database.models.Track as DbTrack
 
+internal fun Track.hasSameAssociation(expected: Track): Boolean =
+    id == expected.id && mangaId == expected.mangaId && trackerId == expected.trackerId &&
+        remoteId == expected.remoteId && libraryId == expected.libraryId && remoteUrl == expected.remoteUrl
+
 fun Track.copyPersonalFrom(other: Track): Track {
     return this.copy(
         lastChapterRead = other.lastChapterRead,

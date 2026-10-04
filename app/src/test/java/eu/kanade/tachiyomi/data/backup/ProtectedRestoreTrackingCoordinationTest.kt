@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.track.interactor.RetryDelayedTracking
 import eu.kanade.domain.track.interactor.TrackChapter
 import eu.kanade.domain.track.store.DelayedTrackingStore
 import eu.kanade.tachiyomi.data.backup.models.Backup
@@ -72,14 +73,21 @@ class ProtectedRestoreTrackingCoordinationTest {
         lateinit var track: Track
         var requests = 0
         var remote: suspend () -> Unit = {}
+        var afterQueueLookup: suspend () -> Unit = {}
         var beforeInsert: suspend () -> Unit = {}
         private val trackingRepository = object : TrackRepository by tracks {
+            override suspend fun getTrackById(id: Long): Track? {
+                val track = tracks.getTrackById(id)
+                afterQueueLookup()
+                return track
+            }
             override suspend fun insert(track: Track) {
                 beforeInsert()
                 tracks.insert(track)
             }
         }
         val tracker: TrackChapter
+        val retry: RetryDelayedTracking
 
         init {
             every { context.getSharedPreferences("tracking_queue", Context.MODE_PRIVATE) } returns shared
@@ -104,6 +112,7 @@ class ProtectedRestoreTrackingCoordinationTest {
             }
             coEvery { service.update(any(), any()) } coAnswers { firstArg() }
             tracker = TrackChapter(GetTracks(tracks), manager, InsertTrack(trackingRepository), queue)
+            retry = RetryDelayedTracking(queue, trackingRepository, tracker)
         }
 
         suspend fun seed() {
@@ -341,6 +350,52 @@ class ProtectedRestoreTrackingCoordinationTest {
             assertEquals(items, t.queue.getItems())
             assertNull(t.imported())
             assertEquals(generation, coordinator.generation)
+        }
+    }
+
+    @Test
+    fun `worker materialization retains lease even if another participant empties queue`() = runBlocking {
+        database { t ->
+            t.queue.add(t.track.id, 5.0)
+            val materialized = CompletableDeferred<Unit>()
+            val apply = CompletableDeferred<Unit>()
+            t.afterQueueLookup = {
+                materialized.complete(Unit)
+                apply.await()
+            }
+            val generation = coordinator.generation
+            val worker = async(start = CoroutineStart.UNDISPATCHED) { t.retry.await(t.context, generation) }
+            materialized.await()
+            // A normal participant can empty the queue, but cannot release the worker's lease.
+            coordinator.operation { t.queue.remove(t.track.id) }
+            val prepared = t.prepared()
+            val restore =
+                async(start = CoroutineStart.UNDISPATCHED) { t.restorer().restore(prepared, RestoreOptions()) }
+            assertFalse(restore.isCompleted)
+            assertEquals(generation, coordinator.generation)
+            assertEquals(0, t.requests)
+            apply.complete(Unit)
+            assertTrue(worker.await())
+            restore.await()
+            assertEquals(1, t.requests)
+            assertEquals(generation + 1, coordinator.generation)
+            assertTrue(t.queue.getItems().isEmpty())
+            assertTrue(t.imported() != null)
+        }
+    }
+
+    @Test
+    fun `worker born before restore cannot materialize queue with a new generation`() = runBlocking {
+        database { t ->
+            val generation = coordinator.generation
+            coordinator.exclusive { }
+            t.queue.add(t.track.id, 5.0)
+            val expected = t.queue.getItems()
+            t.afterQueueLookup = { error("stale worker must not look up tracks") }
+            assertFalse(t.retry.await(t.context, generation))
+            assertEquals(0, t.requests)
+            assertEquals(expected, t.queue.getItems())
+            assertEquals(t.track, t.tracks.getTracksByMangaId(t.manga.id).single())
         }
     }
 }

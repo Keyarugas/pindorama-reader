@@ -26,9 +26,11 @@ class RefreshTracks(
      *
      * @return Failed updates.
      */
-    suspend fun await(mangaId: Long): List<Pair<Tracker?, Throwable>> {
+    suspend fun await(
+        mangaId: Long,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): List<Pair<Tracker?, Throwable>> {
         val coordinator = LibraryOperationCoordinator.shared
-        val generation = coordinator.generation
         return coordinator.operation {
             if (generation != coordinator.generation) return@operation emptyList()
             supervisorScope {
