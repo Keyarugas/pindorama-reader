@@ -83,6 +83,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.interactor.SetMangaChapterFlags
+import tachiyomi.domain.manga.interactor.UpdateMangaNotes
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.applyFilter
@@ -116,6 +117,7 @@ class MangaViewModel(
     private val setBookmarkStatus: SetBookmarkStatus,
     private val updateManga: UpdateManga,
     private val toggleMangaPrivacy: ToggleMangaPrivacy,
+    private val updateMangaNotes: UpdateMangaNotes,
     private val getCategories: GetCategories,
     private val getTracks: GetTracks,
     private val addTracks: AddTracks,
@@ -1122,9 +1124,22 @@ class MangaViewModel(
         updateSuccessState { it.copy(dialog = Dialog.Migrate(target = manga, current = duplicate)) }
     }
 
-    fun setExcludedScanlators(excludedScanlators: Set<String>) {
+    suspend fun loadNotesEditor(generation: Long): Manga? {
+        val manga = successState?.manga ?: return null
+        return updateMangaNotes.loadEditor(manga, generation)
+    }
+
+    suspend fun loadScanlatorSelection(generation: Long): ScanlatorSelection? {
+        val manga = successState?.manga ?: return null
+        val excluded = setExcludedScanlators.loadSelection(manga, generation) ?: return null
+        return ScanlatorSelection(manga, excluded, generation)
+    }
+
+    data class ScanlatorSelection(val manga: Manga, val excluded: Set<String>, val generation: Long)
+
+    fun setExcludedScanlators(manga: Manga, excludedScanlators: Set<String>, generation: Long) {
         viewModelScope.launchIO {
-            setExcludedScanlators.await(mangaId, excludedScanlators)
+            setExcludedScanlators.await(manga, excludedScanlators, generation)
         }
     }
 

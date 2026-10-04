@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.app.di.appGraph
 import okhttp3.Headers
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
@@ -295,8 +296,10 @@ object SettingsAdvancedScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_reset_viewer_flags),
                     subtitle = stringResource(MR.strings.pref_reset_viewer_flags_summary),
                     onClick = {
+                        val generation = LibraryOperationCoordinator.shared.generation
                         scope.launchNonCancellable {
-                            val success = context.appGraph.resetViewerFlags.await()
+                            val success = context.appGraph.resetViewerFlags.await(generation)
+                                ?: return@launchNonCancellable
                             withUIContext {
                                 val message = if (success) {
                                     MR.strings.pref_reset_viewer_flags_success

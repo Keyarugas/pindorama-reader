@@ -27,12 +27,13 @@ import tachiyomi.domain.manga.model.Manga
 
 class MangaNotesScreen(
     private val manga: Manga,
+    private val generation: Long,
 ) : Screen() {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
 
-        val viewModel = assistedMetroViewModel<Model, Model.Factory> { create(manga = manga) }
+        val viewModel = assistedMetroViewModel<Model, Model.Factory> { create(manga = manga, generation = generation) }
         val state by viewModel.state.collectAsState()
 
         MangaNotesScreen(
@@ -45,6 +46,7 @@ class MangaNotesScreen(
     @AssistedInject
     class Model(
         @Assisted private val manga: Manga,
+        @Assisted private val generation: Long,
         private val updateMangaNotes: UpdateMangaNotes,
     ) : ViewModel() {
 
@@ -55,18 +57,16 @@ class MangaNotesScreen(
         @ManualViewModelAssistedFactoryKey
         @ContributesIntoMap(AppScope::class)
         interface Factory : ManualViewModelAssistedFactory {
-            fun create(manga: Manga): Model
+            fun create(manga: Manga, generation: Long): Model
         }
 
         fun updateNotes(content: String) {
             if (content == state.value.notes) return
 
-            state.update {
-                it.copy(notes = content)
-            }
-
             viewModelScope.launchNonCancellable {
-                updateMangaNotes(manga.id, content)
+                if (updateMangaNotes(manga, content, generation)) {
+                    state.update { it.copy(notes = content) }
+                }
             }
         }
     }

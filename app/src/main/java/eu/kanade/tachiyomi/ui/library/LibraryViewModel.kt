@@ -16,20 +16,17 @@ import eu.kanade.core.preference.asState
 import eu.kanade.core.util.fastFilterNot
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.chapter.interactor.SetReadStatus
-import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.manga.interactor.RemoveLibraryMangas
 import eu.kanade.presentation.library.components.LibraryToolbarTitle
 import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
-import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
 import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
-import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +48,7 @@ import mihon.domain.library.model.search.QueryNode
 import mihon.feature.library.matches
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
@@ -68,7 +66,6 @@ import tachiyomi.domain.library.model.sort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
@@ -89,11 +86,10 @@ class LibraryViewModel(
     private val getChaptersByMangaId: GetChaptersByMangaId,
     private val getBookmarkedChaptersByMangaId: GetBookmarkedChaptersByMangaId,
     private val setReadStatus: SetReadStatus,
-    private val updateManga: UpdateManga,
+    private val removeLibraryMangas: RemoveLibraryMangas,
     private val setMangaCategories: SetMangaCategories,
     private val preferences: BasePreferences,
     private val libraryPreferences: LibraryPreferences,
-    private val coverCache: CoverCache,
     private val sourceManager: SourceManager,
     private val downloadManager: DownloadManager,
     private val downloadCache: DownloadCache,
@@ -594,26 +590,9 @@ class LibraryViewModel(
      * @param deleteChapters whether to delete downloaded chapters.
      */
     fun removeMangas(mangas: List<Manga>, deleteFromLibrary: Boolean, deleteChapters: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launchNonCancellable {
-            if (deleteFromLibrary) {
-                val toDelete = mangas.map {
-                    it.removeCovers(coverCache)
-                    MangaUpdate(
-                        favorite = false,
-                        id = it.id,
-                    )
-                }
-                updateManga.awaitAll(toDelete)
-            }
-
-            if (deleteChapters) {
-                mangas.forEach { manga ->
-                    val source = sourceManager.get(manga.source) as? HttpSource
-                    if (source != null) {
-                        downloadManager.deleteManga(manga, source)
-                    }
-                }
-            }
+            removeLibraryMangas.await(mangas, deleteFromLibrary, deleteChapters, generation)
         }
     }
 

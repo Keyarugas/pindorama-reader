@@ -58,6 +58,7 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.feature.migration.config.MigrationConfigScreen
 import mihon.feature.migration.dialog.MigrateMangaDialog
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
@@ -175,7 +176,13 @@ class MangaScreen(
                     changingPrivacy = false
                 }
             },
-            onEditNotesClicked = { navigator.push(MangaNotesScreen(manga = successState.manga)) },
+            onEditNotesClicked = {
+                val generation = LibraryOperationCoordinator.shared.generation
+                scope.launch {
+                    val manga = viewModel.loadNotesEditor(generation) ?: return@launch
+                    navigator.push(MangaNotesScreen(manga = manga, generation = generation))
+                }
+            },
             onMultiBookmarkClicked = viewModel::bookmarkChapters,
             onMultiMarkAsReadClicked = viewModel::markChaptersRead,
             onMarkPreviousAsReadClicked = viewModel::markPreviousChapterRead,
@@ -186,7 +193,7 @@ class MangaScreen(
             onInvertSelection = viewModel::invertSelection,
         )
 
-        var showScanlatorsDialog by remember { mutableStateOf(false) }
+        var scanlatorSelection by remember { mutableStateOf<MangaViewModel.ScanlatorSelection?>(null) }
 
         val onDismissRequest = { viewModel.dismissDialog() }
         when (val dialog = successState.dialog) {
@@ -241,7 +248,10 @@ class MangaScreen(
                 onSetAsDefault = viewModel::setCurrentSettingsAsDefault,
                 onResetToDefault = viewModel::resetToDefaultSettings,
                 scanlatorFilterActive = successState.scanlatorFilterActive,
-                onScanlatorFilterClicked = { showScanlatorsDialog = true },
+                onScanlatorFilterClicked = {
+                    val generation = LibraryOperationCoordinator.shared.generation
+                    scope.launch { scanlatorSelection = viewModel.loadScanlatorSelection(generation) }
+                },
             )
             MangaViewModel.Dialog.TrackSheet -> {
                 NavigatorAdaptiveSheet(
@@ -294,12 +304,12 @@ class MangaScreen(
             }
         }
 
-        if (showScanlatorsDialog) {
+        scanlatorSelection?.let { selection ->
             ScanlatorFilterDialog(
                 availableScanlators = successState.availableScanlators,
-                excludedScanlators = successState.excludedScanlators,
-                onDismissRequest = { showScanlatorsDialog = false },
-                onConfirm = viewModel::setExcludedScanlators,
+                excludedScanlators = selection.excluded,
+                onDismissRequest = { scanlatorSelection = null },
+                onConfirm = { viewModel.setExcludedScanlators(selection.manga, it, selection.generation) },
             )
         }
     }
