@@ -24,6 +24,7 @@ import eu.kanade.domain.chapter.interactor.SetBookmarkStatus
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.GetExcludedScanlators
 import eu.kanade.domain.manga.interactor.SetExcludedScanlators
+import eu.kanade.domain.manga.interactor.ToggleMangaPrivacy
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.chaptersFiltered
 import eu.kanade.domain.manga.model.downloadedFilter
@@ -35,7 +36,6 @@ import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
-import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
@@ -66,6 +66,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.mapAsCheckboxState
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withUIContext
@@ -83,7 +84,6 @@ import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.manga.repository.MangaRepository
@@ -115,6 +115,7 @@ class MangaViewModel(
     private val setReadStatus: SetReadStatus,
     private val setBookmarkStatus: SetBookmarkStatus,
     private val updateManga: UpdateManga,
+    private val toggleMangaPrivacy: ToggleMangaPrivacy,
     private val getCategories: GetCategories,
     private val getTracks: GetTracks,
     private val addTracks: AddTracks,
@@ -138,14 +139,16 @@ class MangaViewModel(
     }
 
     suspend fun togglePrivacy(): Boolean {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return false
-        val privateSession = PrivateContentSessionManager.session
-        if (manga.isPrivate && privateSession.state.value != PrivateContentSessionState.UNLOCKED) return false
-        if (!mangaRepository.update(MangaUpdate(manga.id, isPrivate = !manga.isPrivate))) {
-            snackbarHostState.showSnackbar(context.stringResource(MR.strings.internal_error))
-            return false
+        return when (val result = toggleMangaPrivacy.await(manga, PrivateContentSessionManager.session, generation)) {
+            ToggleMangaPrivacy.Result.Unchanged -> false
+            ToggleMangaPrivacy.Result.Failed -> {
+                snackbarHostState.showSnackbar(context.stringResource(MR.strings.internal_error))
+                false
+            }
+            is ToggleMangaPrivacy.Result.Changed -> result.exitPrivateSession
         }
-        return !manga.isPrivate && privateSession.state.value != PrivateContentSessionState.UNLOCKED
     }
 
     val snackbarHostState: SnackbarHostState = SnackbarHostState()
@@ -232,12 +235,13 @@ class MangaViewModel(
         observeDownloads()
 
         viewModelScope.launchIO {
+            val defaultsGeneration = LibraryOperationCoordinator.shared.generation
             val manga = getMangaAndChapters.awaitManga(mangaId)
             val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
                 .toChapterListItems(manga)
 
             if (!manga.favorite) {
-                setMangaDefaultChapterFlags.await(manga)
+                setMangaDefaultChapterFlags.await(manga, onlyIfNotFavorite = true, generation = defaultsGeneration)
             }
 
             val needRefreshInfo = !manga.initialized
@@ -865,6 +869,7 @@ class MangaViewModel(
      * @param state whether to display only unread chapters or all chapters.
      */
     fun setUnreadFilter(state: TriState) {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return
 
         val flag = when (state) {
@@ -873,7 +878,7 @@ class MangaViewModel(
             TriState.ENABLED_NOT -> Manga.CHAPTER_SHOW_READ
         }
         viewModelScope.launchNonCancellable {
-            setMangaChapterFlags.awaitSetUnreadFilter(manga, flag)
+            setMangaChapterFlags.awaitSetUnreadFilter(manga, flag, generation)
         }
     }
 
@@ -882,6 +887,7 @@ class MangaViewModel(
      * @param state whether to display only downloaded chapters or all chapters.
      */
     fun setDownloadedFilter(state: TriState) {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return
 
         val flag = when (state) {
@@ -891,7 +897,7 @@ class MangaViewModel(
         }
 
         viewModelScope.launchNonCancellable {
-            setMangaChapterFlags.awaitSetDownloadedFilter(manga, flag)
+            setMangaChapterFlags.awaitSetDownloadedFilter(manga, flag, generation)
         }
     }
 
@@ -900,6 +906,7 @@ class MangaViewModel(
      * @param state whether to display only bookmarked chapters or all chapters.
      */
     fun setBookmarkedFilter(state: TriState) {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return
 
         val flag = when (state) {
@@ -909,7 +916,7 @@ class MangaViewModel(
         }
 
         viewModelScope.launchNonCancellable {
-            setMangaChapterFlags.awaitSetBookmarkFilter(manga, flag)
+            setMangaChapterFlags.awaitSetBookmarkFilter(manga, flag, generation)
         }
     }
 
@@ -918,10 +925,11 @@ class MangaViewModel(
      * @param mode the mode to set.
      */
     fun setDisplayMode(mode: Long) {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return
 
         viewModelScope.launchNonCancellable {
-            setMangaChapterFlags.awaitSetDisplayMode(manga, mode)
+            setMangaChapterFlags.awaitSetDisplayMode(manga, mode, generation)
         }
     }
 
@@ -930,28 +938,29 @@ class MangaViewModel(
      * @param sort the sorting mode.
      */
     fun setSorting(sort: Long) {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return
 
         viewModelScope.launchNonCancellable {
-            setMangaChapterFlags.awaitSetSortingModeOrFlipOrder(manga, sort)
+            setMangaChapterFlags.awaitSetSortingModeOrFlipOrder(manga, sort, generation)
         }
     }
 
     fun setCurrentSettingsAsDefault(applyToExisting: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return
         viewModelScope.launchNonCancellable {
-            libraryPreferences.setChapterSettingsDefault(manga)
-            if (applyToExisting) {
-                setMangaDefaultChapterFlags.awaitAll()
+            if (setMangaDefaultChapterFlags.awaitSetCurrentAsDefault(manga, applyToExisting, generation)) {
+                snackbarHostState.showSnackbar(message = context.stringResource(MR.strings.chapter_settings_updated))
             }
-            snackbarHostState.showSnackbar(message = context.stringResource(MR.strings.chapter_settings_updated))
         }
     }
 
     fun resetToDefaultSettings() {
+        val generation = LibraryOperationCoordinator.shared.generation
         val manga = successState?.manga ?: return
         viewModelScope.launchNonCancellable {
-            setMangaDefaultChapterFlags.await(manga)
+            setMangaDefaultChapterFlags.await(manga, generation = generation)
         }
     }
 

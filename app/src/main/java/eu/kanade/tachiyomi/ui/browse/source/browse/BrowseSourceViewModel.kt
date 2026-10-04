@@ -21,14 +21,11 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactory
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactoryKey
 import eu.kanade.core.preference.asState
-import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.manga.interactor.ToggleMangaFavorite
 import eu.kanade.domain.source.interactor.GetIncognitoState
 import eu.kanade.domain.source.service.SourcePreferences
-import eu.kanade.domain.track.interactor.AddTracks
-import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,20 +39,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.mapAsCheckboxState
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaWithChapterCount
-import tachiyomi.domain.manga.model.toMangaUpdate
 import tachiyomi.domain.source.interactor.GetRemoteManga
 import tachiyomi.domain.source.service.SourceManager
-import kotlin.time.Clock
 import eu.kanade.tachiyomi.source.model.Filter as SourceModelFilter
 
 @AssistedInject
@@ -65,15 +60,12 @@ class BrowseSourceViewModel(
     private val sourceManager: SourceManager,
     sourcePreferences: SourcePreferences,
     private val libraryPreferences: LibraryPreferences,
-    private val coverCache: CoverCache,
     private val getRemoteManga: GetRemoteManga,
     private val getDuplicateLibraryManga: GetDuplicateLibraryManga,
     private val getCategories: GetCategories,
     private val setMangaCategories: SetMangaCategories,
-    private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags,
     private val getManga: GetManga,
-    private val updateManga: UpdateManga,
-    private val addTracks: AddTracks,
+    private val toggleMangaFavorite: ToggleMangaFavorite,
     getIncognitoState: GetIncognitoState,
 ) : ViewModel() {
 
@@ -232,23 +224,9 @@ class BrowseSourceViewModel(
      * @param manga the manga to update.
      */
     fun changeMangaFavorite(manga: Manga) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launch {
-            var new = manga.copy(
-                favorite = !manga.favorite,
-                dateAdded = when (manga.favorite) {
-                    true -> 0
-                    false -> Clock.System.now().toEpochMilliseconds()
-                },
-            )
-
-            if (!new.favorite) {
-                new = new.removeCovers(coverCache)
-            } else {
-                setMangaDefaultChapterFlags.await(manga)
-                addTracks.bindEnhancedTrackers(manga, sourceManager.getOrStub(manga.source))
-            }
-
-            updateManga.await(new.toMangaUpdate())
+            toggleMangaFavorite.await(manga, generation)
         }
     }
 
