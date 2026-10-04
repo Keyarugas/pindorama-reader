@@ -78,21 +78,23 @@ data object HistoryTab : Tab {
         val onDismissRequest = { viewModel.setDialog(null) }
         when (val dialog = state.dialog) {
             is HistoryViewModel.Dialog.Delete -> {
-                HistoryDeleteDialog(
-                    onDismissRequest = onDismissRequest,
-                    onDelete = { all ->
-                        if (all) {
-                            viewModel.removeAllFromHistory(dialog.history.mangaId)
-                        } else {
-                            viewModel.removeFromHistory(dialog.history)
-                        }
-                    },
-                )
+                dialog.target?.let { target ->
+                    HistoryDeleteDialog(
+                        onDismissRequest = onDismissRequest,
+                        onDelete = { all ->
+                            if (all) {
+                                viewModel.removeAllFromHistory(target)
+                            } else {
+                                viewModel.removeFromHistory(target)
+                            }
+                        },
+                    )
+                }
             }
             is HistoryViewModel.Dialog.DeleteAll -> {
                 HistoryDeleteAllDialog(
                     onDismissRequest = onDismissRequest,
-                    onDelete = viewModel::removeAllHistory,
+                    onDelete = { viewModel.removeAllHistory(dialog.generation) },
                 )
             }
             is HistoryViewModel.Dialog.DuplicateManga -> {

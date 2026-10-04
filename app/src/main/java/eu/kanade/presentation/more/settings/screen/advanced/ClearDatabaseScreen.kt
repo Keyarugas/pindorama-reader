@@ -37,6 +37,7 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import dev.zacsweers.metrox.viewmodel.metroViewModel
+import eu.kanade.domain.manga.interactor.ClearDatabaseEntries
 import eu.kanade.presentation.browse.components.SourceIcon
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
@@ -49,11 +50,9 @@ import kotlinx.coroutines.flow.update
 import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.rounded.FlipToBack
 import mihon.icons.materialsymbols.rounded.SelectAll
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchUI
-import tachiyomi.core.common.util.lang.toLong
-import tachiyomi.core.common.util.lang.withNonCancellableContext
-import tachiyomi.data.Database
 import tachiyomi.domain.source.interactor.GetSourcesWithNonLibraryManga
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.model.SourceWithCount
@@ -79,8 +78,9 @@ class ClearDatabaseScreen : Screen() {
         when (val s = state) {
             is ClearDatabaseViewModel.State.Loading -> LoadingScreen()
             is ClearDatabaseViewModel.State.Ready -> {
-                if (s.showConfirmation) {
-                    var keepReadManga by remember { mutableStateOf(true) }
+                val confirmation = s.confirmation
+                if (confirmation != null) {
+                    var keepReadManga by remember(confirmation) { mutableStateOf(true) }
                     AlertDialog(
                         title = {
                             Text(text = stringResource(MR.strings.are_you_sure))
@@ -117,8 +117,11 @@ class ClearDatabaseScreen : Screen() {
                         confirmButton = {
                             TextButton(
                                 onClick = {
+                                    val keepRead = keepReadManga
                                     scope.launchUI {
-                                        viewModel.removeMangaBySourceId(keepReadManga)
+                                        if (!viewModel.removeMangaBySourceId(confirmation, keepRead)) {
+                                            return@launchUI
+                                        }
                                         viewModel.clearSelection()
                                         viewModel.hideConfirmation()
                                         context.toast(MR.strings.clear_database_completed)
@@ -229,7 +232,7 @@ class ClearDatabaseScreen : Screen() {
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class ClearDatabaseViewModel(
-    private val database: Database,
+    private val clearDatabaseEntries: ClearDatabaseEntries,
     private val getSourcesWithNonLibraryManga: GetSourcesWithNonLibraryManga,
 ) : ViewModel() {
 
@@ -251,11 +254,8 @@ class ClearDatabaseViewModel(
         }
     }
 
-    suspend fun removeMangaBySourceId(keepReadManga: Boolean) = withNonCancellableContext {
-        val state = state.value as? State.Ready ?: return@withNonCancellableContext
-        database.mangasQueries.deleteNonLibraryManga(state.selection, keepReadManga.toLong())
-        database.historyQueries.removeResettedHistory()
-    }
+    suspend fun removeMangaBySourceId(confirmation: Confirmation, keepReadManga: Boolean): Boolean =
+        clearDatabaseEntries.await(confirmation.sourceIds, keepReadManga, confirmation.generation)
 
     fun toggleSelection(source: Source) = state.update { state ->
         if (state !is State.Ready) return@update state
@@ -287,15 +287,20 @@ class ClearDatabaseViewModel(
         )
     }
 
-    fun showConfirmation() = state.update { state ->
-        if (state !is State.Ready) return@update state
-        state.copy(showConfirmation = true)
+    fun showConfirmation() {
+        val generation = LibraryOperationCoordinator.shared.generation
+        state.update { state ->
+            if (state !is State.Ready) return@update state
+            state.copy(confirmation = Confirmation(state.selection.toList(), generation))
+        }
     }
 
     fun hideConfirmation() = state.update { state ->
         if (state !is State.Ready) return@update state
-        state.copy(showConfirmation = false)
+        state.copy(confirmation = null)
     }
+
+    data class Confirmation(val sourceIds: List<Long>, val generation: Long)
 
     sealed interface State {
         @Immutable
@@ -305,7 +310,7 @@ class ClearDatabaseViewModel(
         data class Ready(
             val items: List<SourceWithCount>,
             val selection: List<Long> = emptyList(),
-            val showConfirmation: Boolean = false,
+            val confirmation: Confirmation? = null,
         ) : State
     }
 }

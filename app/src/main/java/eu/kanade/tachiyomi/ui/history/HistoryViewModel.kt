@@ -137,21 +137,21 @@ class HistoryViewModel(
         _events.send(Event.OpenChapter(chapter))
     }
 
-    fun removeFromHistory(history: HistoryWithRelations) {
+    fun removeFromHistory(target: RemoveHistory.Target) {
         viewModelScope.launchIO {
-            removeHistory.await(history)
+            removeHistory.await(target)
         }
     }
 
-    fun removeAllFromHistory(mangaId: Long) {
+    fun removeAllFromHistory(target: RemoveHistory.Target) {
         viewModelScope.launchIO {
-            removeHistory.await(mangaId)
+            removeHistory.await(target.manga, target.generation)
         }
     }
 
-    fun removeAllHistory() {
+    fun removeAllHistory(generation: Long) {
         viewModelScope.launchIO {
-            val result = removeHistory.awaitAll()
+            val result = removeHistory.awaitAll(generation)
             if (!result) return@launchIO
             _events.send(Event.HistoryCleared)
         }
@@ -162,7 +162,16 @@ class HistoryViewModel(
     }
 
     fun setDialog(dialog: Dialog?) {
-        this.dialog.update { dialog }
+        this.dialog.value = dialog
+        if (dialog is Dialog.Delete) {
+            viewModelScope.launchIO {
+                val target = removeHistory.loadTarget(dialog.history, dialog.generation)
+                this@HistoryViewModel.dialog.update { current ->
+                    if (current !== dialog) return@update current
+                    target?.let { dialog.copy(target = it) }
+                }
+            }
+        }
     }
 
     fun moveMangaToCategoriesAndAddToLibrary(manga: Manga, categories: List<Long>, generation: Long) {
@@ -226,8 +235,12 @@ class HistoryViewModel(
     )
 
     sealed interface Dialog {
-        data object DeleteAll : Dialog
-        data class Delete(val history: HistoryWithRelations) : Dialog
+        data class DeleteAll(val generation: Long = LibraryOperationCoordinator.shared.generation) : Dialog
+        data class Delete(
+            val history: HistoryWithRelations,
+            val generation: Long = LibraryOperationCoordinator.shared.generation,
+            val target: RemoveHistory.Target? = null,
+        ) : Dialog
         data class DuplicateManga(
             val manga: Manga,
             val duplicates: List<MangaWithChapterCount>,

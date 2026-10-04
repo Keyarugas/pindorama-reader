@@ -52,7 +52,7 @@ fun HistoryScreen(
                                 title = stringResource(MR.strings.pref_clear_history),
                                 icon = MaterialSymbols.Rounded.DeleteSweep,
                                 onClick = {
-                                    onDialogChange(HistoryViewModel.Dialog.DeleteAll)
+                                    onDialogChange(HistoryViewModel.Dialog.DeleteAll())
                                 },
                             ),
                         ),
