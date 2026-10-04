@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.DeleteCategory
 import tachiyomi.domain.category.interactor.GetCategories
@@ -64,9 +65,9 @@ class CategoryViewModel(
         }
     }
 
-    fun deleteCategory(categoryId: Long) {
+    fun deleteCategory(categoryId: Long, generation: Long) {
         viewModelScope.launch {
-            when (deleteCategory.await(categoryId = categoryId)) {
+            when (deleteCategory.await(categoryId = categoryId, generation = generation)) {
                 is DeleteCategory.Result.InternalError -> _events.send(CategoryEvent.InternalError)
                 else -> {}
             }
@@ -74,17 +75,18 @@ class CategoryViewModel(
     }
 
     fun changeOrder(category: Category, newIndex: Int) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launch {
-            when (reorderCategory.await(category, newIndex)) {
+            when (reorderCategory.await(category, newIndex, generation)) {
                 is ReorderCategory.Result.InternalError -> _events.send(CategoryEvent.InternalError)
                 else -> {}
             }
         }
     }
 
-    fun renameCategory(category: Category, name: String) {
+    fun renameCategory(category: Category, name: String, generation: Long) {
         viewModelScope.launch {
-            when (renameCategory.await(category, name)) {
+            when (renameCategory.await(category, name, generation)) {
                 is RenameCategory.Result.InternalError -> _events.send(CategoryEvent.InternalError)
                 else -> {}
             }
@@ -92,7 +94,32 @@ class CategoryViewModel(
     }
 
     fun showDialog(dialog: CategoryDialog) {
-        this.dialog.update { dialog }
+        if (dialog == CategoryDialog.Create) {
+            this.dialog.value = dialog
+            return
+        }
+        val generation = when (dialog) {
+            is CategoryDialog.Rename -> dialog.generation
+            is CategoryDialog.Delete -> dialog.generation
+            CategoryDialog.Create -> return
+        }
+        val id = when (dialog) {
+            is CategoryDialog.Rename -> dialog.category.id
+            is CategoryDialog.Delete -> dialog.category.id
+            CategoryDialog.Create -> return
+        }
+        val coordinator = LibraryOperationCoordinator.shared
+        viewModelScope.launch {
+            coordinator.operation {
+                if (generation != coordinator.generation) return@operation
+                val current = getCategories.await().find { it.id == id } ?: return@operation
+                this@CategoryViewModel.dialog.value = when (dialog) {
+                    is CategoryDialog.Rename -> dialog.copy(category = current)
+                    is CategoryDialog.Delete -> dialog.copy(category = current)
+                    CategoryDialog.Create -> dialog
+                }
+            }
+        }
     }
 
     fun dismissDialog() {
@@ -102,8 +129,14 @@ class CategoryViewModel(
 
 sealed interface CategoryDialog {
     data object Create : CategoryDialog
-    data class Rename(val category: Category) : CategoryDialog
-    data class Delete(val category: Category) : CategoryDialog
+    data class Rename(
+        val category: Category,
+        val generation: Long = LibraryOperationCoordinator.shared.generation,
+    ) : CategoryDialog
+    data class Delete(
+        val category: Category,
+        val generation: Long = LibraryOperationCoordinator.shared.generation,
+    ) : CategoryDialog
 }
 
 sealed interface CategoryEvent {

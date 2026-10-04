@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.stateIn
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getAndSet
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.category.interactor.SetDisplayMode
 import tachiyomi.domain.category.interactor.SetSortModeForCategory
@@ -55,8 +56,9 @@ class LibrarySettingsViewModel(
     }
 
     fun setSort(category: Category?, mode: LibrarySort.Type, direction: LibrarySort.Direction) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launchIO {
-            setSortModeForCategory.await(category, mode, direction)
+            setSortModeForCategory.await(category, mode, direction, generation)
         }
     }
 }

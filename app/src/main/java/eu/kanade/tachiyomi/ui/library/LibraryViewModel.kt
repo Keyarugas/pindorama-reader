@@ -481,32 +481,8 @@ class LibraryViewModel(
         }
     }
 
-    /**
-     * Returns the common categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getCommonCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        return mangas
-            .map { getCategories.await(it.id).toSet() }
-            .reduce { set1, set2 -> set1.intersect(set2) }
-    }
-
     suspend fun getNextUnreadChapter(manga: Manga): Chapter? {
         return getChaptersByMangaId.await(manga.id, applyScanlatorFilter = true).getNextUnread(manga, downloadManager)
-    }
-
-    /**
-     * Returns the mix (non-common) categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getMixCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        val mangaCategories = mangas.map { getCategories.await(it.id).toSet() }
-        val common = mangaCategories.reduce { set1, set2 -> set1.intersect(set2) }
-        return mangaCategories.flatten().distinct().subtract(common)
     }
 
     /**
@@ -603,17 +579,14 @@ class LibraryViewModel(
      * @param addCategories the categories to add for all mangas.
      * @param removeCategories the categories to remove in all mangas.
      */
-    fun setMangaCategories(mangaList: List<Manga>, addCategories: List<Long>, removeCategories: List<Long>) {
+    fun setMangaCategories(
+        mangaList: List<Manga>,
+        addCategories: List<Long>,
+        removeCategories: List<Long>,
+        generation: Long,
+    ) {
         viewModelScope.launchNonCancellable {
-            mangaList.forEach { manga ->
-                val categoryIds = getCategories.await(manga.id)
-                    .map { it.id }
-                    .subtract(removeCategories.toSet())
-                    .plus(addCategories)
-                    .toList()
-
-                setMangaCategories.await(manga.id, categoryIds)
-            }
+            setMangaCategories.awaitAll(mangaList, addCategories, removeCategories, generation)
         }
     }
 
@@ -737,27 +710,21 @@ class LibraryViewModel(
     }
 
     fun openChangeCategoryDialog() {
+        val generation = LibraryOperationCoordinator.shared.generation
+        val expected = selectedManga
         viewModelScope.launchIO {
-            // Create a copy of selected manga
-            val mangaList = selectedManga
-
-            // Hide the default category because it has a different behavior than the ones from db.
-            val categories = state.value.displayedCategories.filter { it.id != 0L }
-
-            // Get indexes of the common categories to preselect.
-            val common = getCommonCategories(mangaList)
-            // Get indexes of the mix categories to preselect.
-            val mix = getMixCategories(mangaList)
-            val preselected = categories
-                .map {
-                    when (it) {
-                        in common -> CheckboxState.State.Checked(it)
-                        in mix -> CheckboxState.TriState.Exclude(it)
-                        else -> CheckboxState.State.None(it)
-                    }
+            val selection = setMangaCategories.loadSelection(expected, generation) ?: return@launchIO
+            val sets = selection.categoryIds.values.map { it.toSet() }
+            val common = sets.reduce { left, right -> left.intersect(right) }
+            val mix = sets.flatten().toSet().subtract(common)
+            val preselected = selection.categories.map {
+                when (it.id) {
+                    in common -> CheckboxState.State.Checked(it)
+                    in mix -> CheckboxState.TriState.Exclude(it)
+                    else -> CheckboxState.State.None(it)
                 }
-
-            dialog.update { Dialog.ChangeCategory(mangaList, preselected) }
+            }
+            dialog.update { Dialog.ChangeCategory(selection.mangas, preselected, generation) }
         }
     }
 
@@ -774,6 +741,7 @@ class LibraryViewModel(
         data class ChangeCategory(
             val manga: List<Manga>,
             val initialSelection: List<CheckboxState<Category>>,
+            val generation: Long,
         ) : Dialog
 
         data class DeleteManga(val manga: List<Manga>) : Dialog

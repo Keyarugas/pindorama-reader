@@ -277,7 +277,7 @@ data object LibraryTab : Tab {
                     },
                     onConfirm = { include, exclude ->
                         viewModel.clearSelection()
-                        viewModel.setMangaCategories(dialog.manga, include, exclude)
+                        viewModel.setMangaCategories(dialog.manga, include, exclude, dialog.generation)
                     },
                 )
             }

@@ -1,7 +1,9 @@
 package tachiyomi.domain.category.interactor
 
 import dev.zacsweers.metro.Inject
+import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.model.Category
@@ -21,25 +23,30 @@ class CreateCategoryWithName(
         }
 
     suspend fun await(name: String): Result = withNonCancellableContext {
-        val categories = categoryRepository.getAll()
-        val nextOrder = categories.maxOfOrNull { it.order }?.plus(1) ?: 0
-        val newCategory = Category(
-            id = 0,
-            name = name,
-            order = nextOrder,
-            flags = initialFlags,
-        )
+        LibraryOperationCoordinator.shared.operation {
+            val categories = categoryRepository.getAll()
+            if (name.isEmpty() || categories.any { it.name == name }) return@operation Result.Unchanged
+            val nextOrder = categories.maxOfOrNull { it.order }?.plus(1) ?: 0
+            val newCategory = Category(
+                id = 0,
+                name = name,
+                order = nextOrder,
+                flags = initialFlags,
+            )
 
-        try {
-            categoryRepository.insert(newCategory)
-            Result.Success
-        } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e)
-            Result.InternalError(e)
+            try {
+                categoryRepository.insert(newCategory)
+                Result.Success
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                logcat(LogPriority.ERROR, e)
+                Result.InternalError(e)
+            }
         }
     }
 
     sealed interface Result {
+        data object Unchanged : Result
         data object Success : Result
         data class InternalError(val error: Throwable) : Result
     }

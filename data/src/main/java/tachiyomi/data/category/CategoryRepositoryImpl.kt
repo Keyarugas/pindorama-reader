@@ -65,6 +65,14 @@ class CategoryRepositoryImpl(
         database.categoriesQueries.updateFlags(flags = flags, categoryId = categoryId)
     }
 
+    override suspend fun updateFlagsBatch(flagsByCategory: Map<Long, Long>) {
+        database.transaction {
+            flagsByCategory.forEach { (categoryId, flags) ->
+                database.categoriesQueries.updateFlags(flags = flags, categoryId = categoryId)
+            }
+        }
+    }
+
     override suspend fun updateAllFlags(flags: Long?) {
         database.categoriesQueries.updateAllFlags(flags = flags)
     }

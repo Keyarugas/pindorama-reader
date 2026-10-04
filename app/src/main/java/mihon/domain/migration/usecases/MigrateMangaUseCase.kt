@@ -102,7 +102,8 @@ class MigrateMangaUseCase(
             // Update categories
             if (MigrationFlag.CATEGORY in flags) {
                 val categoryIds = getCategories.await(current.id).map { it.id }
-                setMangaCategories.await(target.id, categoryIds)
+                // The admitted migration lease prevents its generation from changing here.
+                setMangaCategories.await(target, categoryIds, LibraryOperationCoordinator.shared.generation)
             }
 
             // Update track
