@@ -225,7 +225,7 @@ class MangaScreen(
                     onDismissRequest = onDismissRequest,
                     onConfirm = { viewModel.addFavorite(dialog.manga, dialog.generation) },
                     onOpenManga = { navigator.push(MangaScreen(it.id)) },
-                    onMigrate = { viewModel.showMigrateDialog(it) },
+                    onMigrate = { viewModel.showMigrateDialog(it, dialog.generation) },
                 )
             }
 
@@ -233,6 +233,7 @@ class MangaScreen(
                 MigrateMangaDialog(
                     current = dialog.current,
                     target = dialog.target,
+                    generation = dialog.generation,
                     // Initiated from the context of [dialog.target] so we show [dialog.current].
                     onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
                     onDismissRequest = onDismissRequest,

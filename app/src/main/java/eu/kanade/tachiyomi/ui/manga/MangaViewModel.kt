@@ -1021,7 +1021,7 @@ class MangaViewModel(
             val duplicates: List<MangaWithChapterCount>,
             val generation: Long,
         ) : Dialog
-        data class Migrate(val target: Manga, val current: Manga) : Dialog
+        data class Migrate(val target: Manga, val current: Manga, val generation: Long) : Dialog
         data class SetFetchInterval(val manga: Manga) : Dialog
         data object SettingsSheet : Dialog
         data object TrackSheet : Dialog
@@ -1048,9 +1048,11 @@ class MangaViewModel(
         updateSuccessState { it.copy(dialog = Dialog.FullCover) }
     }
 
-    fun showMigrateDialog(duplicate: Manga) {
+    fun showMigrateDialog(duplicate: Manga, generation: Long) {
         val manga = successState?.manga ?: return
-        updateSuccessState { it.copy(dialog = Dialog.Migrate(target = manga, current = duplicate)) }
+        updateSuccessState {
+            it.copy(dialog = Dialog.Migrate(target = manga, current = duplicate, generation = generation))
+        }
     }
 
     suspend fun loadNotesEditor(generation: Long): Manga? {

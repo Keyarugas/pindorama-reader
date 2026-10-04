@@ -244,7 +244,9 @@ data class BrowseSourceScreen(
                     onDismissRequest = onDismissRequest,
                     onConfirm = { viewModel.addFavorite(dialog.manga, dialog.generation) },
                     onOpenManga = { navigator.push(MangaScreen(it.id)) },
-                    onMigrate = { viewModel.setDialog(BrowseSourceViewModel.Dialog.Migrate(dialog.manga, it)) },
+                    onMigrate = {
+                        viewModel.setDialog(BrowseSourceViewModel.Dialog.Migrate(dialog.manga, it, dialog.generation))
+                    },
                 )
             }
 
@@ -252,6 +254,7 @@ data class BrowseSourceScreen(
                 MigrateMangaDialog(
                     current = dialog.current,
                     target = dialog.target,
+                    generation = dialog.generation,
                     // Initiated from the context of [dialog.target] so we show [dialog.current].
                     onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
                     onDismissRequest = onDismissRequest,

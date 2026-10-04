@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import mihon.domain.migration.models.MigrationFlag
 import mihon.domain.source.interactor.UpdateMangaFromRemote
 import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
@@ -44,23 +46,67 @@ class MigrateMangaUseCase(
 ) {
     private val enhancedServices by lazy { trackerManager.trackers.filterIsInstance<EnhancedTracker>() }
 
-    suspend operator fun invoke(current: Manga, target: Manga, replace: Boolean): Boolean =
-        LibraryOperationCoordinator.shared.operation {
-            val freshCurrent = getManga.await(current.id)
-            val freshTarget = getManga.await(target.id)
-            if (freshCurrent == null || freshCurrent.source != current.source || freshCurrent.url != current.url) {
-                return@operation false
-            }
-            if (freshTarget == null || freshTarget.source != target.source || freshTarget.url != target.url) {
-                return@operation false
-            }
-            migrate(freshCurrent, freshTarget, replace)
+    suspend operator fun invoke(
+        current: Manga,
+        target: Manga,
+        replace: Boolean,
+        generation: Long,
+        flags: Set<MigrationFlag>? = null,
+    ): Boolean = LibraryOperationCoordinator.shared.operation {
+        if (generation != LibraryOperationCoordinator.shared.generation) return@operation false
+        val freshCurrent = getManga.await(current.id)
+        currentCoroutineContext().ensureActive()
+        val freshTarget = getManga.await(target.id)
+        currentCoroutineContext().ensureActive()
+        if (freshCurrent == null || freshCurrent.id != current.id || freshCurrent.source != current.source ||
+            freshCurrent.url != current.url
+        ) {
+            return@operation false
         }
+        if (freshTarget == null || freshTarget.id != target.id || freshTarget.source != target.source ||
+            freshTarget.url != target.url
+        ) {
+            return@operation false
+        }
+        migrate(freshCurrent, freshTarget, replace, generation, flags ?: sourcePreferences.migrationFlags.get())
+    }
 
-    private suspend fun migrate(current: Manga, target: Manga, replace: Boolean): Boolean {
+    /** A retained manual selection is applied under one lease, including progress between items. */
+    suspend fun awaitAll(
+        selection: List<Selection>,
+        replace: Boolean,
+        generation: Long,
+        flags: Set<MigrationFlag>,
+        onProgress: suspend (Int, Boolean) -> Unit = { _, _ -> },
+    ): Boolean = LibraryOperationCoordinator.shared.operation {
+        if (generation != LibraryOperationCoordinator.shared.generation) return@operation false
+        var completed = true
+        selection.forEachIndexed { index, item ->
+            currentCoroutineContext().ensureActive()
+            val applied = try {
+                item.target?.let { invoke(item.current, it, replace, generation, flags) } ?: true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            completed = completed && applied
+            onProgress(index, applied)
+        }
+        completed
+    }
+
+    data class Selection(val current: Manga, val target: Manga?)
+
+    private suspend fun migrate(
+        current: Manga,
+        target: Manga,
+        replace: Boolean,
+        generation: Long,
+        flags: Set<MigrationFlag>,
+    ): Boolean {
         val targetSource = sourceManager.get(target.source) ?: return false
         val currentSource = sourceManager.get(current.source)
-        val flags = sourcePreferences.migrationFlags.get()
 
         try {
             updateMangaFromRemote(target, fetchChapters = true).getOrThrow()
@@ -102,8 +148,8 @@ class MigrateMangaUseCase(
             // Update categories
             if (MigrationFlag.CATEGORY in flags) {
                 val categoryIds = getCategories.await(current.id).map { it.id }
-                // The admitted migration lease prevents its generation from changing here.
-                setMangaCategories.await(target, categoryIds, LibraryOperationCoordinator.shared.generation)
+                // Retain the age of the outer manual intent through this nested mutation.
+                setMangaCategories.await(target, categoryIds, generation)
             }
 
             // Update track

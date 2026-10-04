@@ -223,8 +223,8 @@ class HistoryViewModel(
         }
     }
 
-    fun showMigrateDialog(target: Manga, current: Manga) {
-        dialog.update { Dialog.Migrate(target = target, current = current) }
+    fun showMigrateDialog(target: Manga, current: Manga, generation: Long) {
+        dialog.update { Dialog.Migrate(target = target, current = current, generation = generation) }
     }
 
     @Immutable
@@ -251,7 +251,7 @@ class HistoryViewModel(
             val initialSelection: List<CheckboxState<Category>>,
             val generation: Long,
         ) : Dialog
-        data class Migrate(val target: Manga, val current: Manga) : Dialog
+        data class Migrate(val target: Manga, val current: Manga, val generation: Long) : Dialog
     }
 
     sealed interface Event {

@@ -202,10 +202,13 @@ abstract class SearchViewModel(
         updateItems(state.value.items + (source to result))
     }
 
-    fun setMigrateDialog(currentId: Long, target: Manga) {
+    fun setMigrateDialog(currentId: Long, target: Manga, generation: Long) {
         viewModelScope.launchIO {
-            val current = getManga.await(currentId) ?: return@launchIO
-            state.update { it.copy(dialog = Dialog.Migrate(target, current)) }
+            LibraryOperationCoordinator.shared.operation {
+                if (generation != LibraryOperationCoordinator.shared.generation) return@operation
+                val current = getManga.await(currentId) ?: return@operation
+                state.update { it.copy(dialog = Dialog.Migrate(target, current, generation)) }
+            }
         }
     }
 
@@ -228,7 +231,7 @@ abstract class SearchViewModel(
     }
 
     sealed interface Dialog {
-        data class Migrate(val target: Manga, val current: Manga) : Dialog
+        data class Migrate(val target: Manga, val current: Manga, val generation: Long) : Dialog
     }
 }
 

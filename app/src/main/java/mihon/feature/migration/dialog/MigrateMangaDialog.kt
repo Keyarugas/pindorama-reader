@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.update
 import mihon.domain.migration.models.MigrationFlag
 import mihon.domain.migration.usecases.MigrateMangaUseCase
 import mihon.feature.common.utils.getLabel
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.domain.manga.model.Manga
@@ -49,6 +50,7 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 internal fun Screen.MigrateMangaDialog(
     current: Manga,
     target: Manga,
+    generation: Long,
     onClickTitle: () -> Unit,
     onDismissRequest: () -> Unit,
     onComplete: () -> Unit = onDismissRequest,
@@ -56,8 +58,8 @@ internal fun Screen.MigrateMangaDialog(
     val scope = rememberCoroutineScope()
 
     val viewModel = metroViewModel<MigrateDialogViewModel>()
-    LaunchedEffect(current, target) {
-        viewModel.init(current, target)
+    LaunchedEffect(current, target, generation) {
+        viewModel.init(current, target, generation)
     }
     val state by viewModel.state.collectAsState()
 
@@ -106,8 +108,9 @@ internal fun Screen.MigrateMangaDialog(
 
                 TextButton(
                     onClick = {
+                        val intent = viewModel.state.value
                         scope.launchIO {
-                            if (viewModel.migrateManga(replace = false)) withUIContext { onComplete() }
+                            if (viewModel.migrateManga(replace = false, intent = intent)) withUIContext { onComplete() }
                         }
                     },
                 ) {
@@ -115,8 +118,9 @@ internal fun Screen.MigrateMangaDialog(
                 }
                 TextButton(
                     onClick = {
+                        val intent = viewModel.state.value
                         scope.launchIO {
-                            if (viewModel.migrateManga(replace = true)) withUIContext { onComplete() }
+                            if (viewModel.migrateManga(replace = true, intent = intent)) withUIContext { onComplete() }
                         }
                     },
                 ) {
@@ -140,7 +144,11 @@ class MigrateDialogViewModel(
     val state: StateFlow<MigrateDialogViewModel.State>
         field = MutableStateFlow<MigrateDialogViewModel.State>(State())
 
-    fun init(current: Manga, target: Manga) {
+    fun init(current: Manga, target: Manga, generation: Long) {
+        if (generation != LibraryOperationCoordinator.shared.generation) {
+            state.update { State(current = current, target = target, generation = generation) }
+            return
+        }
         val applicableFlags = buildList {
             MigrationFlag.entries.forEach {
                 val applicable = when (it) {
@@ -158,6 +166,7 @@ class MigrateDialogViewModel(
             State(
                 current = current,
                 target = target,
+                generation = generation,
                 applicableFlags = applicableFlags,
                 selectedFlags = selectedFlags,
             )
@@ -173,15 +182,24 @@ class MigrateDialogViewModel(
         }
     }
 
-    suspend fun migrateManga(replace: Boolean): Boolean {
-        val currentState = state.value
+    suspend fun migrateManga(replace: Boolean, intent: State): Boolean {
+        val currentState = intent
+        if (currentState.generation != LibraryOperationCoordinator.shared.generation) return false
         val current = currentState.current ?: return false
         val target = currentState.target ?: return false
-        sourcePreference.migrationFlags.set(currentState.selectedFlags)
         state.update { it.copy(isMigrating = true, failed = false) }
         try {
-            val completed = migrateManga(current, target, replace)
-            state.update { it.copy(isMigrated = completed, failed = !completed) }
+            val completed = LibraryOperationCoordinator.shared.operation {
+                if (currentState.generation != LibraryOperationCoordinator.shared.generation) return@operation false
+                sourcePreference.migrationFlags.set(currentState.selectedFlags)
+                migrateManga(current, target, replace, currentState.generation, currentState.selectedFlags)
+            }
+            state.update {
+                it.copy(
+                    isMigrated = completed,
+                    failed = !completed && currentState.generation == LibraryOperationCoordinator.shared.generation,
+                )
+            }
             return completed
         } finally {
             state.update { it.copy(isMigrating = false) }
@@ -191,6 +209,7 @@ class MigrateDialogViewModel(
     data class State(
         val current: Manga? = null,
         val target: Manga? = null,
+        val generation: Long = -1,
         val applicableFlags: List<MigrationFlag> = emptyList(),
         val selectedFlags: Set<MigrationFlag> = emptySet(),
         val isMigrating: Boolean = false,
