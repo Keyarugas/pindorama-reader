@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import mihon.domain.manga.model.toDomainManga
 import mihon.domain.source.interactor.UpdateMangaFromRemote
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.chapter.interactor.GetChapterByUrlAndMangaId
 import tachiyomi.domain.chapter.model.Chapter
@@ -51,8 +52,9 @@ class DeepLinkViewModel(
                 .filterIsInstance<ResolvableSource>()
                 .firstOrNull { it.getUriType(query) != UriType.Unknown }
 
+            val generation = LibraryOperationCoordinator.shared.generation
             val manga = source?.getManga(query)?.let {
-                networkToLocalManga(it.toDomainManga(source.id))
+                networkToLocalManga(it.toDomainManga(source.id), generation)
             }
 
             val chapter = if (source?.getUriType(query) == UriType.Chapter && manga != null) {

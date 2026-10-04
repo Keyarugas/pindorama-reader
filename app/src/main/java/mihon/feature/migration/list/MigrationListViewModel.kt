@@ -202,6 +202,7 @@ class MigrationListViewModel(
         return try {
             val current = getManga.await(manga.id) ?: return null
             if (current.source != manga.source || current.url != manga.url) return null
+            val generation = LibraryOperationCoordinator.shared.generation
             val searchResult = if (deepSearchMode) {
                 smartSearchEngine.deepSearch(source, current.title)
             } else {
@@ -210,7 +211,7 @@ class MigrationListViewModel(
 
             if (searchResult == null || (searchResult.url == manga.url && source.id == manga.source)) return null
 
-            val localManga = networkToLocalManga(searchResult)
+            val localManga = networkToLocalManga(searchResult, generation) ?: return null
             try {
                 updateMangaFromRemote(localManga, fetchChapters = true).getOrThrow()
             } catch (e: Exception) {
