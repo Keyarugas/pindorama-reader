@@ -4,11 +4,17 @@ import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -22,12 +28,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -64,6 +72,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.Check
+import mihon.icons.materialsymbols.rounded.Info
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.LabeledCheckbox
@@ -84,7 +95,25 @@ class RestoreBackupScreen(
             assistedMetroViewModel<RestoreBackupViewModel, RestoreBackupViewModel.Factory> { create(uri = uri) }
         val state by viewModel.state.collectAsState()
         var password by remember { mutableStateOf("") }
+        var showPolicy by remember { mutableStateOf(false) }
         DisposableEffect(viewModel) { onDispose { viewModel.cancel() } }
+
+        if (showPolicy && !state.complete) {
+            AlertDialog(
+                onDismissRequest = { showPolicy = false },
+                icon = { Icon(MaterialSymbols.Rounded.Info, contentDescription = null) },
+                title = { Text(stringResource(MR.strings.pindorama_restore_title)) },
+                text = {
+                    Text(
+                        stringResource(MR.strings.pindorama_restore_policy),
+                        Modifier.verticalScroll(rememberScrollState()),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPolicy = false }) { Text(stringResource(MR.strings.action_close)) }
+                },
+            )
+        }
 
         Scaffold(
             topBar = {
@@ -96,41 +125,68 @@ class RestoreBackupScreen(
             },
         ) { contentPadding ->
             LazyColumnWithAction(
+                modifier = Modifier.imePadding(),
                 contentPadding = contentPadding,
-                actionLabel = stringResource(MR.strings.action_restore),
-                actionEnabled = state.canRestore && state.options.canRestore() && !state.working,
+                actionLabel = stringResource(
+                    if (state.complete) MR.strings.pindorama_restore_done else MR.strings.action_restore,
+                ),
+                actionEnabled = !state.working && (
+                    state.complete || (state.needsPassword && password.isNotEmpty()) ||
+                        (state.canRestore && state.options.canRestore())
+                    ),
                 onClickAction = {
-                    if (viewModel.startRestore()) navigator.pop()
+                    when {
+                        state.complete -> navigator.pop()
+                        state.needsPassword -> {
+                            viewModel.unlock(password.toCharArray())
+                            password = ""
+                        }
+                        else -> if (viewModel.startRestore()) navigator.pop()
+                    }
                 },
             ) {
-                if (DeviceUtil.isMiui && DeviceUtil.isMiuiOptimizationDisabled()) {
+                if (!state.complete && DeviceUtil.isMiui && DeviceUtil.isMiuiOptimizationDisabled()) {
                     item {
                         WarningBanner(MR.strings.restore_miui_warning)
                     }
                 }
 
-                if (state.protectedBackup) {
-                    item { WarningBanner(MR.strings.pindorama_restore_policy) }
+                if (state.protectedBackup && !state.complete && !state.applicationStarted) {
+                    item {
+                        SectionCard {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(MaterialSymbols.Rounded.Info, contentDescription = null)
+                                Text(
+                                    stringResource(MR.strings.pindorama_restore_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                            }
+                            Text(
+                                stringResource(MR.strings.pindorama_restore_summary),
+                                modifier = Modifier.padding(top = MaterialTheme.padding.small),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            TextButton(onClick = { showPolicy = true }) {
+                                Text(stringResource(MR.strings.pindorama_restore_learn_more))
+                            }
+                        }
+                    }
                 }
                 if (state.needsPassword && !state.working) {
                     item {
-                        Text(stringResource(MR.strings.pindorama_restore_password), Modifier.padding(16.dp))
                         OutlinedTextField(
                             value = password,
                             onValueChange = { if (it.length <= Argon2KeyDerivation.MAX_PASSWORD_CHARS) password = it },
-                            label = { Text(stringResource(MR.strings.password)) },
+                            label = { Text(stringResource(MR.strings.pindorama_restore_password_label)) },
+                            supportingText = { Text(stringResource(MR.strings.pindorama_restore_password_hint)) },
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                         )
-                        TextButton(
-                            enabled = password.isNotEmpty(),
-                            onClick = {
-                                viewModel.unlock(password.toCharArray())
-                                password = ""
-                            },
-                        ) { Text(stringResource(MR.strings.action_restore)) }
                     }
                 }
                 if (state.working) {
@@ -144,11 +200,71 @@ class RestoreBackupScreen(
                     }
                 }
                 if (state.complete) {
-                    item { Text(stringResource(MR.strings.pindorama_restore_complete), Modifier.padding(16.dp)) }
-                }
-                if (state.libraryComplete) {
                     item {
-                        Text(stringResource(MR.strings.pindorama_restore_library_complete), Modifier.padding(16.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(MaterialTheme.padding.large),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                        ) {
+                            Icon(MaterialSymbols.Rounded.Check, contentDescription = null)
+                            Text(
+                                stringResource(MR.strings.pindorama_restore_success_title),
+                                style = MaterialTheme.typography.headlineSmall,
+                                textAlign = TextAlign.Center,
+                            )
+                            Text(
+                                stringResource(
+                                    if (state.options.libraryEntries) {
+                                        MR.strings.pindorama_restore_library_complete
+                                    } else {
+                                        MR.strings.pindorama_restore_selected_complete
+                                    },
+                                ),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    item {
+                        SectionCard {
+                            if (state.options.libraryEntries || state.options.categories) {
+                                RestoreResult(
+                                    stringResource(
+                                        if (state.options.libraryEntries) {
+                                            MR.strings.pindorama_restore_library_details
+                                        } else {
+                                            MR.strings.pindorama_restore_categories_complete
+                                        },
+                                    ),
+                                )
+                            }
+                            RestoreResult(stringResource(MR.strings.pindorama_restore_security_preserved))
+                            RestoreResult(
+                                stringResource(
+                                    if (state.visualPreferences == VisualPreferenceImport.COMPLETE) {
+                                        MR.strings.pindorama_restore_visual_complete
+                                    } else {
+                                        MR.strings.pindorama_restore_visual_not_selected
+                                    },
+                                ),
+                                applied = state.visualPreferences == VisualPreferenceImport.COMPLETE,
+                            )
+                        }
+                    }
+                }
+                if (state.libraryComplete && !state.complete) {
+                    if (state.options.libraryEntries || state.options.categories) {
+                        item {
+                            Text(
+                                stringResource(
+                                    if (state.options.libraryEntries) {
+                                        MR.strings.pindorama_restore_library_complete
+                                    } else {
+                                        MR.strings.pindorama_restore_categories_complete
+                                    },
+                                ),
+                                Modifier.padding(16.dp),
+                            )
+                        }
                     }
                     item {
                         Text(
@@ -254,6 +370,21 @@ class RestoreBackupScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RestoreResult(text: String, applied: Boolean = true) {
+    Row(
+        modifier = Modifier.padding(vertical = MaterialTheme.padding.small),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (applied) MaterialSymbols.Rounded.Check else MaterialSymbols.Rounded.Info,
+            contentDescription = null,
+        )
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
