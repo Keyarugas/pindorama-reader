@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupTracking
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import tachiyomi.data.Database
@@ -18,12 +20,14 @@ import tachiyomi.data.UpdateStrategyColumnAdapter
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.interactor.FetchInterval
 import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.model.Track
+import tachiyomi.domain.track.repository.TrackRepository
 import java.util.Date
 import kotlin.math.max
 import kotlin.time.Clock
@@ -38,6 +42,8 @@ class MangaRestorer(
     private val getTracks: GetTracks,
     private val insertTrack: InsertTrack,
     fetchInterval: FetchInterval,
+    private val chapterRepository: ChapterRepository,
+    private val trackRepository: TrackRepository,
 ) {
 
     private val timeZone = TimeZone.currentSystemDefault()
@@ -57,11 +63,21 @@ class MangaRestorer(
             )
     }
 
-    suspend fun restore(
+    suspend fun restore(backupManga: BackupManga, backupCategories: List<BackupCategory>) {
+        restoreEntry(backupManga, backupCategories, strict = false)
+    }
+
+    suspend fun restoreProtected(backupManga: BackupManga, backupCategories: List<BackupCategory>) {
+        restoreEntry(backupManga, backupCategories, strict = true)
+    }
+
+    private suspend fun restoreEntry(
         backupManga: BackupManga,
         backupCategories: List<BackupCategory>,
+        strict: Boolean,
     ) {
         database.transaction {
+            currentCoroutineContext().ensureActive()
             val dbManga = findExistingManga(backupManga)
             val manga = backupManga.getMangaImpl()
             val restoredManga = if (dbManga == null) {
@@ -78,7 +94,9 @@ class MangaRestorer(
                 history = backupManga.history,
                 tracks = backupManga.tracking,
                 excludedScanlators = backupManga.excludedScanlators,
+                strict = strict,
             )
+            currentCoroutineContext().ensureActive()
         }
     }
 
@@ -148,8 +166,15 @@ class MangaRestorer(
         )
     }
 
-    private suspend fun restoreChapters(manga: Manga, backupChapters: List<BackupChapter>) {
-        val dbChaptersByUrl = getChaptersByMangaId.await(manga.id)
+    private suspend fun restoreChapters(manga: Manga, backupChapters: List<BackupChapter>, strict: Boolean) {
+        // Protected import must propagate failures, without the legacy interactors logging raw exceptions.
+        val dbChaptersByUrl = (
+            if (strict) {
+                chapterRepository.getChapterByMangaId(manga.id, false)
+            } else {
+                getChaptersByMangaId.await(manga.id)
+            }
+            )
             .associateBy { it.url }
 
         val (existingChapters, newChapters) = backupChapters
@@ -281,13 +306,14 @@ class MangaRestorer(
         history: List<BackupHistory>,
         tracks: List<BackupTracking>,
         excludedScanlators: List<String>,
+        strict: Boolean,
     ): Manga {
         restoreCategories(manga, categories, backupCategories)
-        restoreChapters(manga, chapters)
-        restoreTracking(manga, tracks)
+        restoreChapters(manga, chapters, strict)
+        restoreTracking(manga, tracks, strict)
         restoreHistory(manga, history)
         restoreExcludedScanlators(manga, excludedScanlators)
-        updateManga.awaitUpdateFetchInterval(manga, timeZone, now, currentFetchWindow)
+        if (!strict) updateManga.awaitUpdateFetchInterval(manga, timeZone, now, currentFetchWindow)
         return manga
     }
 
@@ -368,8 +394,14 @@ class MangaRestorer(
         }
     }
 
-    private suspend fun restoreTracking(manga: Manga, backupTracks: List<BackupTracking>) {
-        val dbTrackByTrackerId = getTracks.await(manga.id).associateBy { it.trackerId }
+    private suspend fun restoreTracking(manga: Manga, backupTracks: List<BackupTracking>, strict: Boolean) {
+        val dbTrackByTrackerId = (
+            if (strict) {
+                trackRepository.getTracksByMangaId(manga.id)
+            } else {
+                getTracks.await(manga.id)
+            }
+            ).associateBy { it.trackerId }
 
         val (existingTracks, newTracks) = backupTracks
             .mapNotNull {
@@ -396,7 +428,7 @@ class MangaRestorer(
             .partition { it.id > 0 }
 
         if (newTracks.isNotEmpty()) {
-            insertTrack.awaitAll(newTracks)
+            if (strict) trackRepository.insertAll(newTracks) else insertTrack.awaitAll(newTracks)
         }
 
         if (existingTracks.isEmpty()) return

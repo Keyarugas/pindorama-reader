@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import kotlinx.coroutines.launch
 import mihon.app.di.appGraph
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_CHARGING
@@ -96,8 +97,9 @@ object SettingsLibraryScreen : SearchableSettings {
                     title = stringResource(MR.strings.categorized_display_settings),
                     onValueChanged = {
                         if (!it) {
+                            val generation = LibraryOperationCoordinator.shared.generation
                             scope.launch {
-                                context.appGraph.resetCategoryFlags.await()
+                                context.appGraph.resetCategoryFlags.await(generation)
                             }
                         }
                         true

@@ -196,10 +196,6 @@
     <string name="onboarding_permission_notifications_description">Get notified for library updates and more.</string>
     <string name="onboarding_permission_ignore_battery_opts">Background battery usage</string>
     <string name="onboarding_permission_ignore_battery_opts_description">Avoid interruptions to long-running library updates, downloads, and backup restores.</string>
-    <string name="onboarding_permission_crashlytics">Send crash logs</string>
-    <string name="onboarding_permission_crashlytics_description">Send anonymized crash logs to the developers.</string>
-    <string name="onboarding_permission_analytics">Allow analytics</string>
-    <string name="onboarding_permission_analytics_description">Send anonymized usage data to improve app features.</string>
     <string name="onboarding_permission_action_grant">Grant</string>
     <string name="onboarding_guides_new_user">New to %s? We recommend checking out the getting started guide.</string>
     <string name="onboarding_guides_returning_user">Reinstalling %s?</string>
@@ -258,7 +254,6 @@
 
     <string name="pref_category_security">Security and privacy</string>
     <string name="pref_security">Security</string>
-    <string name="pref_firebase">Analytics and Crash logs</string>
 
     <string name="lock_with_biometrics">Require unlock</string>
     <string name="lock_when_idle">Lock when idle</string>
@@ -267,7 +262,6 @@
     <string name="hide_notification_content">Hide notification content</string>
     <string name="secure_screen">Protect on-screen content</string>
     <string name="secure_screen_summary">Blocks screenshots and screen capture on supported devices, and hides recent-app previews. Independent of app lock. Root or a modified OS can bypass this protection.</string>
-    <string name="firebase_summary">Sending crash logs and analytics will allow us to identify and fix issues, improve performance, and make future updates more relevant to your needs</string>
 
     <string name="pref_category_nsfw_content">NSFW (18+) sources</string>
     <string name="pref_show_nsfw_source">Show in sources and extensions lists</string>
@@ -1136,4 +1130,44 @@
     <string name="pindorama_backup_io_error">Unable to access the backup. Check storage availability and permissions.</string>
     <string name="pindorama_backup_destination_not_empty">Choose a new, empty file. Existing backups will not be overwritten.</string>
     <string name="pindorama_backup_operation_failed">The backup operation could not be completed.</string>
+
+    <!-- Pindorama experimental protected manual backup -->
+    <string name="pindorama_backup_protected_option">Protected backup (.pindobk) — experimental</string>
+    <string name="pindorama_backup_protected_experimental">Experimental: protected creation and restoration are experimental. Do not use this as your only backup. This feature is not ready for public distribution.</string>
+    <string name="pindorama_backup_password_warning">Choose a strong, unique password and keep it safely. It will be required to restore this file, including on another device. A forgotten password cannot be recovered. The app does not store it.</string>
+    <string name="pindorama_backup_password_confirm">Confirm backup password</string>
+    <string name="pindorama_backup_password_mismatch">The passwords do not match.</string>
+    <string name="pindorama_backup_password_invalid">Enter and confirm a valid password (up to 1,024 characters). If the screen was closed, enter it again.</string>
+    <string name="pindorama_backup_memory_insufficient">Not enough memory to create this protected backup. Nothing was exported as a conventional backup. Try again after closing other work, or use a device with more available memory.</string>
+    <string name="pindorama_backup_protected_complete">Protected file written and verified. Protected restoration is experimental. Keep your password and other valid backups.</string>
+    <string name="pindorama_backup_creation_cancelled">Backup creation cancelled. A partial protected file may remain if the storage provider could not remove it.</string>
+    <string name="pindorama_restore_format">Unsupported or invalid protected backup format. No data was imported.</string>
+    <string name="pindorama_restore_authentication_failed">Incorrect password or damaged protected backup. No data was imported.</string>
+    <string name="pindorama_restore_policy">Experimental restoration. Security, credentials, source settings, repositories and automatic tasks stay configured locally. Only selected display preferences are imported. Interrupted application may leave partial changes. Keep other valid backups.</string>
+    <string name="pindorama_restore_title">Protected restoration</string>
+    <string name="pindorama_restore_summary">Your local security data, credentials and source settings will be preserved.</string>
+    <string name="pindorama_restore_learn_more">Learn more</string>
+    <string name="pindorama_restore_password_label">Backup password</string>
+    <string name="pindorama_restore_password_hint">This password is independent of app lock and will not be saved.</string>
+    <string name="pindorama_restore_success_title">Backup restored</string>
+    <string name="pindorama_restore_library_details">Library data restored</string>
+    <string name="pindorama_restore_selected_complete">Your selected data was restored successfully.</string>
+    <string name="pindorama_restore_categories_complete">Categories restored successfully.</string>
+    <string name="pindorama_restore_security_preserved">Local security settings preserved</string>
+    <string name="pindorama_restore_done">Done</string>
+    <string name="pindorama_restore_password">Enter the backup password. It is independent of app lock and biometrics. The password is not saved. Authentication and validation must finish before selecting restore options.</string>
+    <string name="pindorama_restore_working">Processing backup. Please keep this screen open.</string>
+    <string name="pindorama_restore_busy">The library is busy. Wait for the current operation to finish, then try restoring again. No library data was imported.</string>
+    <string name="pindorama_restore_complete">Selected supported data restored. Local security settings and automatic tasks were preserved.</string>
+    <string name="pindorama_restore_partial">Restoration did not complete. Library data is applied in one transaction; if already committed, it can remain. Display preferences may need review. No automatic tasks were configured by this import.</string>
+    <string name="pindorama_restore_preference_recovery_failed">Restoration failed and display preferences could not be fully recovered. Review local display settings. Library data may already have been committed.</string>
+    <string name="pindorama_restore_library_complete">Your library was restored successfully.</string>
+    <string name="pindorama_restore_visual_option">Import the nine supported display preferences (optional)</string>
+    <string name="pindorama_restore_visual_not_selected">Display preferences were not imported.</string>
+    <string name="pindorama_restore_visual_pending">Importing display preferences separately.</string>
+    <string name="pindorama_restore_visual_complete">Display preferences imported.</string>
+    <string name="pindorama_restore_visual_failed">Display preference import did not complete. Review local display settings. The committed library data remains restored.</string>
+    <string name="pindorama_reader_write_rejected">Reading changes could not be saved. Reopen the reader to refresh its data.</string>
+    <string name="pindorama_migration_failed">Migration did not complete. Refresh the selected works and try again. Some changes may already have been applied.</string>
+    <string name="pindorama_restore_pending_tracking">There are pending tracking updates. Complete them before restoring the library.</string>
 </resources>

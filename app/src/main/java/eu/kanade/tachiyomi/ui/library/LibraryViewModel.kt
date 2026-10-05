@@ -16,20 +16,17 @@ import eu.kanade.core.preference.asState
 import eu.kanade.core.util.fastFilterNot
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.chapter.interactor.SetReadStatus
-import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.manga.interactor.RemoveLibraryMangas
 import eu.kanade.presentation.library.components.LibraryToolbarTitle
 import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.tachiyomi.core.security.PrivateContentSessionState
-import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.security.PrivateContentSessionManager
 import eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
-import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +48,7 @@ import mihon.domain.library.model.search.QueryNode
 import mihon.feature.library.matches
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
@@ -68,7 +66,6 @@ import tachiyomi.domain.library.model.sort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
@@ -89,11 +86,10 @@ class LibraryViewModel(
     private val getChaptersByMangaId: GetChaptersByMangaId,
     private val getBookmarkedChaptersByMangaId: GetBookmarkedChaptersByMangaId,
     private val setReadStatus: SetReadStatus,
-    private val updateManga: UpdateManga,
+    private val removeLibraryMangas: RemoveLibraryMangas,
     private val setMangaCategories: SetMangaCategories,
     private val preferences: BasePreferences,
     private val libraryPreferences: LibraryPreferences,
-    private val coverCache: CoverCache,
     private val sourceManager: SourceManager,
     private val downloadManager: DownloadManager,
     private val downloadCache: DownloadCache,
@@ -485,32 +481,8 @@ class LibraryViewModel(
         }
     }
 
-    /**
-     * Returns the common categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getCommonCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        return mangas
-            .map { getCategories.await(it.id).toSet() }
-            .reduce { set1, set2 -> set1.intersect(set2) }
-    }
-
     suspend fun getNextUnreadChapter(manga: Manga): Chapter? {
         return getChaptersByMangaId.await(manga.id, applyScanlatorFilter = true).getNextUnread(manga, downloadManager)
-    }
-
-    /**
-     * Returns the mix (non-common) categories for the given list of manga.
-     *
-     * @param mangas the list of manga.
-     */
-    private suspend fun getMixCategories(mangas: List<Manga>): Collection<Category> {
-        if (mangas.isEmpty()) return emptyList()
-        val mangaCategories = mangas.map { getCategories.await(it.id).toSet() }
-        val common = mangaCategories.reduce { set1, set2 -> set1.intersect(set2) }
-        return mangaCategories.flatten().distinct().subtract(common)
     }
 
     /**
@@ -574,14 +546,10 @@ class LibraryViewModel(
      * Marks mangas' chapters read status.
      */
     fun markReadSelection(read: Boolean) {
-        val selection = selectedManga
+        val generation = LibraryOperationCoordinator.shared.generation
+        val selection = selectedManga.toList()
         viewModelScope.launchNonCancellable {
-            selection.forEach { manga ->
-                setReadStatus.await(
-                    manga = manga,
-                    read = read,
-                )
-            }
+            setReadStatus.awaitAll(selection, read, generation)
         }
         clearSelection()
     }
@@ -593,27 +561,9 @@ class LibraryViewModel(
      * @param deleteFromLibrary whether to delete manga from library.
      * @param deleteChapters whether to delete downloaded chapters.
      */
-    fun removeMangas(mangas: List<Manga>, deleteFromLibrary: Boolean, deleteChapters: Boolean) {
+    fun removeMangas(mangas: List<Manga>, deleteFromLibrary: Boolean, deleteChapters: Boolean, generation: Long) {
         viewModelScope.launchNonCancellable {
-            if (deleteFromLibrary) {
-                val toDelete = mangas.map {
-                    it.removeCovers(coverCache)
-                    MangaUpdate(
-                        favorite = false,
-                        id = it.id,
-                    )
-                }
-                updateManga.awaitAll(toDelete)
-            }
-
-            if (deleteChapters) {
-                mangas.forEach { manga ->
-                    val source = sourceManager.get(manga.source) as? HttpSource
-                    if (source != null) {
-                        downloadManager.deleteManga(manga, source)
-                    }
-                }
-            }
+            removeLibraryMangas.await(mangas, deleteFromLibrary, deleteChapters, generation)
         }
     }
 
@@ -624,17 +574,14 @@ class LibraryViewModel(
      * @param addCategories the categories to add for all mangas.
      * @param removeCategories the categories to remove in all mangas.
      */
-    fun setMangaCategories(mangaList: List<Manga>, addCategories: List<Long>, removeCategories: List<Long>) {
+    fun setMangaCategories(
+        mangaList: List<Manga>,
+        addCategories: List<Long>,
+        removeCategories: List<Long>,
+        generation: Long,
+    ) {
         viewModelScope.launchNonCancellable {
-            mangaList.forEach { manga ->
-                val categoryIds = getCategories.await(manga.id)
-                    .map { it.id }
-                    .subtract(removeCategories.toSet())
-                    .plus(addCategories)
-                    .toList()
-
-                setMangaCategories.await(manga.id, categoryIds)
-            }
+            setMangaCategories.awaitAll(mangaList, addCategories, removeCategories, generation)
         }
     }
 
@@ -758,32 +705,27 @@ class LibraryViewModel(
     }
 
     fun openChangeCategoryDialog() {
+        val generation = LibraryOperationCoordinator.shared.generation
+        val expected = selectedManga
         viewModelScope.launchIO {
-            // Create a copy of selected manga
-            val mangaList = selectedManga
-
-            // Hide the default category because it has a different behavior than the ones from db.
-            val categories = state.value.displayedCategories.filter { it.id != 0L }
-
-            // Get indexes of the common categories to preselect.
-            val common = getCommonCategories(mangaList)
-            // Get indexes of the mix categories to preselect.
-            val mix = getMixCategories(mangaList)
-            val preselected = categories
-                .map {
-                    when (it) {
-                        in common -> CheckboxState.State.Checked(it)
-                        in mix -> CheckboxState.TriState.Exclude(it)
-                        else -> CheckboxState.State.None(it)
-                    }
+            val selection = setMangaCategories.loadSelection(expected, generation) ?: return@launchIO
+            val sets = selection.categoryIds.values.map { it.toSet() }
+            val common = sets.reduce { left, right -> left.intersect(right) }
+            val mix = sets.flatten().toSet().subtract(common)
+            val preselected = selection.categories.map {
+                when (it.id) {
+                    in common -> CheckboxState.State.Checked(it)
+                    in mix -> CheckboxState.TriState.Exclude(it)
+                    else -> CheckboxState.State.None(it)
                 }
-
-            dialog.update { Dialog.ChangeCategory(mangaList, preselected) }
+            }
+            dialog.update { Dialog.ChangeCategory(selection.mangas, preselected, generation) }
         }
     }
 
     fun openDeleteMangaDialog() {
-        dialog.update { Dialog.DeleteManga(selectedManga) }
+        val generation = LibraryOperationCoordinator.shared.generation
+        dialog.update { Dialog.DeleteManga(selectedManga.toList(), generation) }
     }
 
     fun closeDialog() {
@@ -795,9 +737,10 @@ class LibraryViewModel(
         data class ChangeCategory(
             val manga: List<Manga>,
             val initialSelection: List<CheckboxState<Category>>,
+            val generation: Long,
         ) : Dialog
 
-        data class DeleteManga(val manga: List<Manga>) : Dialog
+        data class DeleteManga(val manga: List<Manga>, val generation: Long) : Dialog
     }
 
     @Immutable

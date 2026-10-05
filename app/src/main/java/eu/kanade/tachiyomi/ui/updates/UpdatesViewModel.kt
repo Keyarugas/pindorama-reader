@@ -15,6 +15,7 @@ import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import eu.kanade.core.preference.asState
 import eu.kanade.core.util.addOrRemove
 import eu.kanade.core.util.insertSeparators
+import eu.kanade.domain.chapter.interactor.SetBookmarkStatus
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.updates.UpdatesUiModel
@@ -51,12 +52,12 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import logcat.LogPriority
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.interactor.GetChapter
-import tachiyomi.domain.chapter.interactor.UpdateChapter
-import tachiyomi.domain.chapter.model.ChapterUpdate
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.applyFilter
@@ -75,7 +76,7 @@ class UpdatesViewModel(
     private val sourceManager: SourceManager,
     private val downloadManager: DownloadManager,
     private val downloadCache: DownloadCache,
-    private val updateChapter: UpdateChapter,
+    private val setBookmarkStatus: SetBookmarkStatus,
     private val setReadStatus: SetReadStatus,
     private val getUpdates: GetUpdates,
     private val getManga: GetManga,
@@ -299,12 +300,20 @@ class UpdatesViewModel(
      * @param read whether to mark chapters as read or unread.
      */
     fun markUpdatesRead(updates: List<UpdatesItem>, read: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launchIO {
             setReadStatus.await(
                 read = read,
                 chapters = updates
-                    .mapNotNull { getChapter.await(it.update.chapterId) }
+                    .map {
+                        Chapter.create().copy(
+                            id = it.update.chapterId,
+                            mangaId = it.update.mangaId,
+                            url = it.update.chapterUrl,
+                        )
+                    }
                     .toTypedArray(),
+                generation = generation,
             )
         }
         toggleAllSelection(false)
@@ -315,11 +324,19 @@ class UpdatesViewModel(
      * @param updates the list of chapters to bookmark.
      */
     fun bookmarkUpdates(updates: List<UpdatesItem>, bookmark: Boolean) {
+        val generation = LibraryOperationCoordinator.shared.generation
         viewModelScope.launchIO {
-            updates
-                .filterNot { it.update.bookmark == bookmark }
-                .map { ChapterUpdate(id = it.update.chapterId, bookmark = bookmark) }
-                .let { updateChapter.awaitAll(it) }
+            setBookmarkStatus.await(
+                bookmarked = bookmark,
+                chapters = updates.map {
+                    Chapter.create().copy(
+                        id = it.update.chapterId,
+                        mangaId = it.update.mangaId,
+                        url = it.update.chapterUrl,
+                    )
+                }.toTypedArray(),
+                generation = generation,
+            )
         }
         toggleAllSelection(false)
     }

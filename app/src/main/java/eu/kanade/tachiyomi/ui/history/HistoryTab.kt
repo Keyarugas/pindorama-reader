@@ -78,30 +78,32 @@ data object HistoryTab : Tab {
         val onDismissRequest = { viewModel.setDialog(null) }
         when (val dialog = state.dialog) {
             is HistoryViewModel.Dialog.Delete -> {
-                HistoryDeleteDialog(
-                    onDismissRequest = onDismissRequest,
-                    onDelete = { all ->
-                        if (all) {
-                            viewModel.removeAllFromHistory(dialog.history.mangaId)
-                        } else {
-                            viewModel.removeFromHistory(dialog.history)
-                        }
-                    },
-                )
+                dialog.target?.let { target ->
+                    HistoryDeleteDialog(
+                        onDismissRequest = onDismissRequest,
+                        onDelete = { all ->
+                            if (all) {
+                                viewModel.removeAllFromHistory(target)
+                            } else {
+                                viewModel.removeFromHistory(target)
+                            }
+                        },
+                    )
+                }
             }
             is HistoryViewModel.Dialog.DeleteAll -> {
                 HistoryDeleteAllDialog(
                     onDismissRequest = onDismissRequest,
-                    onDelete = viewModel::removeAllHistory,
+                    onDelete = { viewModel.removeAllHistory(dialog.generation) },
                 )
             }
             is HistoryViewModel.Dialog.DuplicateManga -> {
                 DuplicateMangaDialog(
                     duplicates = dialog.duplicates,
                     onDismissRequest = onDismissRequest,
-                    onConfirm = { viewModel.addFavorite(dialog.manga) },
+                    onConfirm = { viewModel.addFavorite(dialog.manga, dialog.generation) },
                     onOpenManga = { navigator.push(MangaScreen(it.id)) },
-                    onMigrate = { viewModel.showMigrateDialog(dialog.manga, it) },
+                    onMigrate = { viewModel.showMigrateDialog(dialog.manga, it, dialog.generation) },
                 )
             }
             is HistoryViewModel.Dialog.ChangeCategory -> {
@@ -110,7 +112,7 @@ data object HistoryTab : Tab {
                     onDismissRequest = onDismissRequest,
                     onEditCategories = { navigator.push(CategoryScreen()) },
                     onConfirm = { include, _ ->
-                        viewModel.moveMangaToCategoriesAndAddToLibrary(dialog.manga, include)
+                        viewModel.moveMangaToCategoriesAndAddToLibrary(dialog.manga, include, dialog.generation)
                     },
                 )
             }
@@ -118,6 +120,7 @@ data object HistoryTab : Tab {
                 MigrateMangaDialog(
                     current = dialog.current,
                     target = dialog.target,
+                    generation = dialog.generation,
                     // Initiated from the context of [dialog.target] so we show [dialog.current].
                     onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
                     onDismissRequest = onDismissRequest,

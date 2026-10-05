@@ -28,7 +28,7 @@ data object PindoramaHomeTab : Tab {
         @Composable get() = TabOptions(
             index = 0u,
             title = stringResource(MR.strings.pindorama_home),
-            icon = painterResource(R.drawable.ic_pindorama),
+            icon = painterResource(R.drawable.ic_pindorama_brand),
         )
 
     override suspend fun onReselect(navigator: Navigator) = Unit

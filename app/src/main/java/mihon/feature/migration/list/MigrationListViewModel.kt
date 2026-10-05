@@ -20,7 +20,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -29,11 +28,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
+import mihon.domain.migration.models.MigrationFlag
 import mihon.domain.migration.usecases.MigrateMangaUseCase
 import mihon.domain.source.interactor.UpdateMangaFromRemote
 import mihon.feature.migration.list.models.MigratingManga
 import mihon.feature.migration.list.models.MigratingManga.SearchResult
 import mihon.feature.migration.list.search.SmartSourceSearchEngine
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
@@ -47,6 +48,7 @@ import tachiyomi.domain.source.service.SourceManager
 class MigrationListViewModel(
     @Assisted mangaIds: Collection<Long>,
     @Assisted extraSearchQuery: String?,
+    @Assisted private val generation: Long,
     private val preferences: SourcePreferences,
     private val sourceManager: SourceManager,
     private val getManga: GetManga,
@@ -63,7 +65,7 @@ class MigrationListViewModel(
     @ManualViewModelAssistedFactoryKey
     @ContributesIntoMap(AppScope::class)
     interface Factory : ManualViewModelAssistedFactory {
-        fun create(mangaIds: Collection<Long>, extraSearchQuery: String?): MigrationListViewModel
+        fun create(mangaIds: Collection<Long>, extraSearchQuery: String?, generation: Long): MigrationListViewModel
     }
 
     private val smartSearchEngine = SmartSourceSearchEngine(extraSearchQuery)
@@ -134,7 +136,7 @@ class MigrationListViewModel(
             if (!manga.migrationScope.isActive) continue
 
             val result = try {
-                manga.migrationScope.async {
+                manga.produce {
                     if (prioritizeByChapters) {
                         val sourceSemaphore = Semaphore(5)
                         sources.map { source ->
@@ -151,7 +153,7 @@ class MigrationListViewModel(
                     } else {
                         sources.forEach { source ->
                             val result = searchSource(manga.manga, source, deepSearchMode)
-                            if (result != null) return@async result
+                            if (result != null) return@produce result
                         }
                         null
                     }
@@ -163,7 +165,14 @@ class MigrationListViewModel(
 
             if (result != null && result.first.thumbnailUrl == null) {
                 try {
-                    updateMangaFromRemote(result.first, fetchDetails = true, manualFetch = true).getOrThrow().manga
+                    LibraryOperationCoordinator.shared.operation {
+                        val current = getManga.await(result.first.id)
+                        if (current != null && current.source == result.first.source &&
+                            current.url == result.first.url
+                        ) {
+                            updateMangaFromRemote(current, fetchDetails = true, manualFetch = true).getOrThrow()
+                        }
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -192,15 +201,18 @@ class MigrationListViewModel(
         deepSearchMode: Boolean,
     ): Pair<Manga, ChapterInfo>? {
         return try {
+            val current = getManga.await(manga.id) ?: return null
+            if (current.source != manga.source || current.url != manga.url) return null
+            val generation = LibraryOperationCoordinator.shared.generation
             val searchResult = if (deepSearchMode) {
-                smartSearchEngine.deepSearch(source, manga.title)
+                smartSearchEngine.deepSearch(source, current.title)
             } else {
-                smartSearchEngine.regularSearch(source, manga.title)
+                smartSearchEngine.regularSearch(source, current.title)
             }
 
             if (searchResult == null || (searchResult.url == manga.url && source.id == manga.source)) return null
 
-            val localManga = networkToLocalManga(searchResult)
+            val localManga = networkToLocalManga(searchResult, generation) ?: return null
             try {
                 updateMangaFromRemote(localManga, fetchChapters = true).getOrThrow()
             } catch (e: Exception) {
@@ -229,12 +241,14 @@ class MigrationListViewModel(
     private fun migrationComplete() = items.all { it.searchResult.value != SearchResult.Searching } &&
         items.any { it.searchResult.value is SearchResult.Success }
 
-    fun useMangaForMigration(current: Long, target: Long, onMissingChapters: () -> Unit) {
+    fun useMangaForMigration(current: Long, target: Long, generation: Long, onMissingChapters: () -> Unit) {
+        if (generation != this.generation || generation != LibraryOperationCoordinator.shared.generation) return
         val migratingManga = items.find { it.manga.id == current } ?: return
         migratingManga.searchResult.value = SearchResult.Searching
         viewModelScope.launchIO {
-            val result = migratingManga.migrationScope.async {
-                val manga = getManga.await(target) ?: return@async null
+            val result = migratingManga.produce {
+                if (generation != LibraryOperationCoordinator.shared.generation) return@produce null
+                val manga = getManga.await(target) ?: return@produce null
                 try {
                     val source = sourceManager.get(manga.source)!!
                     updateMangaFromRemote(source = source, manga = manga, fetchChapters = true).getOrThrow().manga
@@ -244,6 +258,7 @@ class MigrationListViewModel(
             }
                 .await()
 
+            if (generation != LibraryOperationCoordinator.shared.generation) return@launchIO
             if (result == null) {
                 migratingManga.searchResult.value = SearchResult.NotFound
                 withUIContext { onMissingChapters() }
@@ -255,42 +270,26 @@ class MigrationListViewModel(
         }
     }
 
-    fun migrateMangas() {
-        migrateMangas(replace = true)
-    }
-
-    fun copyMangas() {
-        migrateMangas(replace = false)
-    }
-
-    private fun migrateMangas(replace: Boolean) {
+    fun migrateMangas(dialog: Dialog.Migrate) {
+        if (dialog.generation != LibraryOperationCoordinator.shared.generation) return
         migrateJob = viewModelScope.launchIO {
-            state.update { it.copy(dialog = Dialog.Progress(0f)) }
-            val items = items
             try {
-                items.forEachIndexed { index, manga ->
-                    try {
-                        ensureActive()
-                        val target = manga.searchResult.value.let {
-                            if (it is SearchResult.Success) {
-                                it.manga
-                            } else {
-                                null
-                            }
-                        }
-                        if (target != null) {
-                            migrateManga(current = manga.manga, target = target, replace = replace)
-                        }
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        logcat(LogPriority.WARN, throwable = e)
-                    }
+                if (dialog.generation != LibraryOperationCoordinator.shared.generation) return@launchIO
+                state.update { it.copy(dialog = Dialog.Progress(0f), migrationFailed = false) }
+                val completed = migrateManga.awaitAll(
+                    dialog.selection,
+                    replace = !dialog.copy,
+                    generation = dialog.generation,
+                    flags = dialog.flags,
+                ) { index, applied ->
                     state.update {
-                        it.copy(dialog = Dialog.Progress((index.toFloat() / items.size).coerceAtMost(1f)))
+                        it.copy(
+                            migrationFailed = it.migrationFailed || !applied,
+                            dialog = Dialog.Progress((index.toFloat() / dialog.totalCount).coerceAtMost(1f)),
+                        )
                     }
                 }
-
-                navigateBack()
+                if (completed) navigateBack()
             } finally {
                 state.update { it.copy(dialog = null) }
                 migrateJob = null
@@ -308,12 +307,24 @@ class MigrationListViewModel(
     }
 
     fun migrateNow(mangaId: Long, replace: Boolean) {
+        val generation = this.generation
+        if (generation != LibraryOperationCoordinator.shared.generation) return
+        val manga = items.find { it.manga.id == mangaId } ?: return
+        val target = (manga.searchResult.value as? SearchResult.Success)?.manga ?: return
+        val flags = preferences.migrationFlags.get().toSet()
         viewModelScope.launchIO {
-            val manga = items.find { it.manga.id == mangaId } ?: return@launchIO
-            val target = (manga.searchResult.value as? SearchResult.Success)?.manga ?: return@launchIO
-            migrateManga(current = manga.manga, target = target, replace = replace)
-
-            removeManga(mangaId)
+            if (migrateManga(
+                    current = manga.manga,
+                    target = target,
+                    replace = replace,
+                    generation = generation,
+                    flags = flags,
+                )
+            ) {
+                removeManga(mangaId)
+            } else if (generation == LibraryOperationCoordinator.shared.generation) {
+                state.update { it.copy(migrationFailed = true) }
+            }
         }
     }
 
@@ -337,10 +348,18 @@ class MigrationListViewModel(
     }
 
     fun showMigrateDialog(copy: Boolean) {
+        if (generation != LibraryOperationCoordinator.shared.generation) return
+        val selection = items.map {
+            MigrateMangaUseCase.Selection(it.manga, (it.searchResult.value as? SearchResult.Success)?.manga)
+        }
+        val flags = preferences.migrationFlags.get().toSet()
         state.update { state ->
             state.copy(
                 dialog = Dialog.Migrate(
                     copy = copy,
+                    generation = generation,
+                    selection = selection,
+                    flags = flags,
                     totalCount = items.size,
                     skippedCount = items.count { it.searchResult.value == SearchResult.NotFound },
                 ),
@@ -364,7 +383,14 @@ class MigrationListViewModel(
     )
 
     sealed interface Dialog {
-        data class Migrate(val copy: Boolean, val totalCount: Int, val skippedCount: Int) : Dialog
+        data class Migrate(
+            val copy: Boolean,
+            val totalCount: Int,
+            val skippedCount: Int,
+            val generation: Long,
+            val selection: List<MigrateMangaUseCase.Selection>,
+            val flags: Set<MigrationFlag>,
+        ) : Dialog
         data class Progress(@FloatRange(0.0, 1.0) val progress: Float) : Dialog
         data object Exit : Dialog
     }
@@ -373,6 +399,7 @@ class MigrationListViewModel(
         val items: List<MigratingManga> = listOf(),
         val finishedCount: Int = 0,
         val migrationComplete: Boolean = false,
+        val migrationFailed: Boolean = false,
         val dialog: Dialog? = null,
     ) {
         val mangaIds: List<Long> = items.map { it.manga.id }

@@ -12,8 +12,12 @@ import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchViewModel
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import mihon.feature.migration.dialog.MigrateMangaDialog
 import mihon.feature.migration.list.MigrationListScreen
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 
-class MigrateSearchScreen(private val mangaId: Long) : Screen() {
+class MigrateSearchScreen(
+    private val mangaId: Long,
+    private val generation: Long = LibraryOperationCoordinator.shared.generation,
+) : Screen() {
 
     @Composable
     override fun Content() {
@@ -32,16 +36,18 @@ class MigrateSearchScreen(private val mangaId: Long) : Screen() {
             getManga = { viewModel.getManga(it) },
             onChangeSearchFilter = viewModel::setSourceFilter,
             onToggleResults = viewModel::toggleFilterResults,
-            onClickSource = { navigator.push(MigrateSourceSearchScreen(state.from!!, it.id, state.searchQuery)) },
+            onClickSource = {
+                navigator.push(MigrateSourceSearchScreen(state.from!!, it.id, state.searchQuery, generation))
+            },
             onClickItem = {
                 val migrateListScreen = navigator.items
                     .filterIsInstance<MigrationListScreen>()
                     .lastOrNull()
 
                 if (migrateListScreen == null) {
-                    viewModel.setMigrateDialog(mangaId, it)
+                    viewModel.setMigrateDialog(mangaId, it, generation)
                 } else {
-                    migrateListScreen.addMatchOverride(current = mangaId, target = it.id)
+                    migrateListScreen.addMatchOverride(current = mangaId, target = it.id, generation = generation)
                     navigator.popUntil { screen -> screen is MigrationListScreen }
                 }
             },
@@ -53,6 +59,7 @@ class MigrateSearchScreen(private val mangaId: Long) : Screen() {
                 MigrateMangaDialog(
                     current = dialog.current,
                     target = dialog.target,
+                    generation = dialog.generation,
                     // Initiated from the context of [dialog.current] so we show [dialog.target].
                     onClickTitle = { navigator.push(MangaScreen(dialog.target.id, true)) },
                     onDismissRequest = { viewModel.clearDialog() },

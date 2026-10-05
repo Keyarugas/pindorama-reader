@@ -4,20 +4,40 @@ import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,14 +56,25 @@ import eu.kanade.presentation.components.WarningBanner
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.data.backup.BackupError
 import eu.kanade.tachiyomi.data.backup.BackupFileValidator
+import eu.kanade.tachiyomi.data.backup.create.protectedBackupOperation
+import eu.kanade.tachiyomi.data.backup.crypto.Argon2KeyDerivation
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
+import eu.kanade.tachiyomi.data.backup.restore.PreparedProtectedRestore
+import eu.kanade.tachiyomi.data.backup.restore.ProtectedBackupRestorer
+import eu.kanade.tachiyomi.data.backup.restore.ProtectedRestoreLoader
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.Check
+import mihon.icons.materialsymbols.rounded.Info
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.LabeledCheckbox
@@ -63,6 +94,26 @@ class RestoreBackupScreen(
         val viewModel =
             assistedMetroViewModel<RestoreBackupViewModel, RestoreBackupViewModel.Factory> { create(uri = uri) }
         val state by viewModel.state.collectAsState()
+        var password by remember { mutableStateOf("") }
+        var showPolicy by remember { mutableStateOf(false) }
+        DisposableEffect(viewModel) { onDispose { viewModel.cancel() } }
+
+        if (showPolicy && !state.complete) {
+            AlertDialog(
+                onDismissRequest = { showPolicy = false },
+                icon = { Icon(MaterialSymbols.Rounded.Info, contentDescription = null) },
+                title = { Text(stringResource(MR.strings.pindorama_restore_title)) },
+                text = {
+                    Text(
+                        stringResource(MR.strings.pindorama_restore_policy),
+                        Modifier.verticalScroll(rememberScrollState()),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPolicy = false }) { Text(stringResource(MR.strings.action_close)) }
+                },
+            )
+        }
 
         Scaffold(
             topBar = {
@@ -74,27 +125,184 @@ class RestoreBackupScreen(
             },
         ) { contentPadding ->
             LazyColumnWithAction(
+                modifier = Modifier.imePadding(),
                 contentPadding = contentPadding,
-                actionLabel = stringResource(MR.strings.action_restore),
-                actionEnabled = state.canRestore && state.options.canRestore(),
+                actionLabel = stringResource(
+                    if (state.complete) MR.strings.pindorama_restore_done else MR.strings.action_restore,
+                ),
+                actionEnabled = !state.working && (
+                    state.complete || (state.needsPassword && password.isNotEmpty()) ||
+                        (state.canRestore && state.options.canRestore())
+                    ),
                 onClickAction = {
-                    viewModel.startRestore()
-                    navigator.pop()
+                    when {
+                        state.complete -> navigator.pop()
+                        state.needsPassword -> {
+                            viewModel.unlock(password.toCharArray())
+                            password = ""
+                        }
+                        else -> if (viewModel.startRestore()) navigator.pop()
+                    }
                 },
             ) {
-                if (DeviceUtil.isMiui && DeviceUtil.isMiuiOptimizationDisabled()) {
+                if (!state.complete && DeviceUtil.isMiui && DeviceUtil.isMiuiOptimizationDisabled()) {
                     item {
                         WarningBanner(MR.strings.restore_miui_warning)
                     }
                 }
 
+                if (state.protectedBackup && !state.complete && !state.applicationStarted) {
+                    item {
+                        SectionCard {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(MaterialSymbols.Rounded.Info, contentDescription = null)
+                                Text(
+                                    stringResource(MR.strings.pindorama_restore_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                            }
+                            Text(
+                                stringResource(MR.strings.pindorama_restore_summary),
+                                modifier = Modifier.padding(top = MaterialTheme.padding.small),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            TextButton(onClick = { showPolicy = true }) {
+                                Text(stringResource(MR.strings.pindorama_restore_learn_more))
+                            }
+                        }
+                    }
+                }
+                if (state.needsPassword && !state.working) {
+                    item {
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { if (it.length <= Argon2KeyDerivation.MAX_PASSWORD_CHARS) password = it },
+                            label = { Text(stringResource(MR.strings.pindorama_restore_password_label)) },
+                            supportingText = { Text(stringResource(MR.strings.pindorama_restore_password_hint)) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        )
+                    }
+                }
+                if (state.working) {
+                    item {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text(stringResource(MR.strings.pindorama_restore_working), Modifier.padding(16.dp))
+                        TextButton(onClick = {
+                            password = ""
+                            viewModel.cancel()
+                        }) { Text(stringResource(MR.strings.action_cancel)) }
+                    }
+                }
+                if (state.complete) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(MaterialTheme.padding.large),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
+                        ) {
+                            Icon(MaterialSymbols.Rounded.Check, contentDescription = null)
+                            Text(
+                                stringResource(MR.strings.pindorama_restore_success_title),
+                                style = MaterialTheme.typography.headlineSmall,
+                                textAlign = TextAlign.Center,
+                            )
+                            Text(
+                                stringResource(
+                                    if (state.options.libraryEntries) {
+                                        MR.strings.pindorama_restore_library_complete
+                                    } else {
+                                        MR.strings.pindorama_restore_selected_complete
+                                    },
+                                ),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    item {
+                        SectionCard {
+                            if (state.options.libraryEntries || state.options.categories) {
+                                RestoreResult(
+                                    stringResource(
+                                        if (state.options.libraryEntries) {
+                                            MR.strings.pindorama_restore_library_details
+                                        } else {
+                                            MR.strings.pindorama_restore_categories_complete
+                                        },
+                                    ),
+                                )
+                            }
+                            RestoreResult(stringResource(MR.strings.pindorama_restore_security_preserved))
+                            RestoreResult(
+                                stringResource(
+                                    if (state.visualPreferences == VisualPreferenceImport.COMPLETE) {
+                                        MR.strings.pindorama_restore_visual_complete
+                                    } else {
+                                        MR.strings.pindorama_restore_visual_not_selected
+                                    },
+                                ),
+                                applied = state.visualPreferences == VisualPreferenceImport.COMPLETE,
+                            )
+                        }
+                    }
+                }
+                if (state.libraryComplete && !state.complete) {
+                    if (state.options.libraryEntries || state.options.categories) {
+                        item {
+                            Text(
+                                stringResource(
+                                    if (state.options.libraryEntries) {
+                                        MR.strings.pindorama_restore_library_complete
+                                    } else {
+                                        MR.strings.pindorama_restore_categories_complete
+                                    },
+                                ),
+                                Modifier.padding(16.dp),
+                            )
+                        }
+                    }
+                    item {
+                        Text(
+                            stringResource(
+                                when (state.visualPreferences) {
+                                    VisualPreferenceImport.NOT_SELECTED ->
+                                        MR.strings.pindorama_restore_visual_not_selected
+                                    VisualPreferenceImport.PENDING -> MR.strings.pindorama_restore_visual_pending
+                                    VisualPreferenceImport.COMPLETE -> MR.strings.pindorama_restore_visual_complete
+                                    VisualPreferenceImport.FAILED -> MR.strings.pindorama_restore_visual_failed
+                                },
+                            ),
+                            Modifier.padding(16.dp),
+                        )
+                    }
+                }
+                if (state.applicationStarted && !state.complete && !state.working) {
+                    item { WarningBanner(MR.strings.pindorama_restore_partial) }
+                }
                 if (state.canRestore) {
                     item {
                         SectionCard {
-                            RestoreOptions.options.forEach { option ->
+                            RestoreOptions.options.filter {
+                                !state.protectedBackup || (
+                                    it.label != MR.strings.extensionStores &&
+                                        it.label != MR.strings.source_settings
+                                    )
+                            }.forEach { option ->
                                 LabeledCheckbox(
-                                    label = stringResource(option.label),
+                                    label = stringResource(
+                                        if (state.protectedBackup && option.label == MR.strings.app_settings) {
+                                            MR.strings.pindorama_restore_visual_option
+                                        } else {
+                                            option.label
+                                        },
+                                    ),
                                     checked = option.getter(state.options),
+                                    enabled = !state.working,
                                     onCheckedChange = {
                                         viewModel.toggle(option.setter, it)
                                     },
@@ -139,17 +347,15 @@ class RestoreBackupScreen(
                             }
 
                             is InvalidRestore -> {
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    appendLine(stringResource(MR.strings.invalid_backup_file))
-                                }
-
-                                appendLine()
-
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    appendLine(stringResource(MR.strings.invalid_backup_file_error))
-                                }
-                                appendLine(stringResource(error.error.messageRes))
-                                appendLine(error.error.name)
+                                appendLine(
+                                    stringResource(
+                                        if (error.error == BackupError.BUSY) {
+                                            MR.strings.pindorama_restore_busy
+                                        } else {
+                                            error.error.messageRes
+                                        },
+                                    ),
+                                )
                             }
 
                             else -> {
@@ -167,11 +373,28 @@ class RestoreBackupScreen(
     }
 }
 
+@Composable
+private fun RestoreResult(text: String, applied: Boolean = true) {
+    Row(
+        modifier = Modifier.padding(vertical = MaterialTheme.padding.small),
+        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (applied) MaterialSymbols.Rounded.Check else MaterialSymbols.Rounded.Info,
+            contentDescription = null,
+        )
+        Text(text, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 @AssistedInject
 class RestoreBackupViewModel(
     @Assisted private val uri: String,
     private val backupFileValidator: BackupFileValidator,
     private val context: Context,
+    private val protectedLoader: ProtectedRestoreLoader,
+    private val protectedRestorer: ProtectedBackupRestorer,
 ) : ViewModel() {
 
     val state: StateFlow<RestoreBackupViewModel.State>
@@ -184,13 +407,89 @@ class RestoreBackupViewModel(
         fun create(uri: String): RestoreBackupViewModel
     }
 
+    private var prepared: PreparedProtectedRestore? = null
+    private var operation: Job? = null
+
     init {
-        viewModelScope.launchIO {
-            validate(uri.toUri())
+        operation = viewModelScope.launchIO {
+            try {
+                if (protectedLoader.isProtected(uri.toUri())) {
+                    state.update { it.copy(protectedBackup = true, needsPassword = true) }
+                } else {
+                    validate(uri.toUri())
+                }
+            } catch (_: CancellationException) {
+                setError(InvalidRestore(BackupError.CANCELLED), false)
+            } catch (e: Exception) {
+                setError(InvalidRestore(BackupError.from(e)), false)
+            }
         }
     }
 
+    fun unlock(password: CharArray) {
+        if (state.value.working || !state.value.needsPassword) {
+            password.fill('\u0000')
+            return
+        }
+        state.update { it.copy(working = true, error = null, canRestore = false) }
+        operation = viewModelScope.launchIO {
+            try {
+                val value = protectedBackupOperation { protectedLoader.prepare(uri.toUri(), password) }
+                currentCoroutineContext().ensureActive()
+                prepared = value
+                state.update {
+                    it.copy(
+                        canRestore = true,
+                        needsPassword = false,
+                        options = it.options.copy(appSettings = false, sourceSettings = false, extensionStores = false),
+                    )
+                }
+            } catch (_: CancellationException) {
+                prepared = null
+                setError(InvalidRestore(BackupError.CANCELLED), false)
+            } catch (e: Exception) {
+                prepared = null
+                setError(InvalidRestore(BackupError.from(e)), false)
+            } finally {
+                password.fill('\u0000')
+            }
+        }.also { job ->
+            job.invokeOnCompletion { cause ->
+                password.fill('\u0000')
+                if (cause is CancellationException) {
+                    prepared = null
+                    state.update {
+                        it.copy(
+                            error = InvalidRestore(BackupError.CANCELLED),
+                            canRestore = false,
+                            needsPassword = true,
+                        )
+                    }
+                }
+                state.update { it.copy(working = false) }
+            }
+        }
+    }
+
+    fun cancel() {
+        operation?.cancel()
+        prepared = null
+        state.update {
+            it.copy(
+                error = if (it.working) InvalidRestore(BackupError.CANCELLED) else it.error,
+                canRestore = false,
+                needsPassword = it.protectedBackup && !it.applicationStarted,
+            )
+        }
+    }
+
+    override fun onCleared() {
+        cancel()
+        super.onCleared()
+    }
+
     fun toggle(setter: (RestoreOptions, Boolean) -> RestoreOptions, enabled: Boolean) {
+        if (state.value.working) return
         state.update {
             it.copy(
                 options = setter(it.options, enabled),
@@ -198,12 +497,78 @@ class RestoreBackupViewModel(
         }
     }
 
-    fun startRestore() {
+    fun startRestore(): Boolean {
+        if (!state.value.canRestore || state.value.working || !state.value.options.canRestore()) return false
+        if (state.value.protectedBackup) {
+            val value = prepared ?: return false
+            prepared = null
+            val options = state.value.options
+            state.update { it.copy(working = true, canRestore = false, error = null) }
+            operation = viewModelScope.launchIO {
+                try {
+                    currentCoroutineContext().ensureActive()
+                    state.update { it.copy(applicationStarted = true) }
+                    protectedRestorer.restore(value, options.copy(appSettings = false))
+                    state.update {
+                        it.copy(
+                            libraryComplete = true,
+                            visualPreferences = if (options.appSettings) {
+                                VisualPreferenceImport.PENDING
+                            } else {
+                                VisualPreferenceImport.NOT_SELECTED
+                            },
+                        )
+                    }
+                    if (options.appSettings) {
+                        protectedRestorer.importVisualPreferences(value)
+                        state.update { it.copy(visualPreferences = VisualPreferenceImport.COMPLETE) }
+                    }
+                    currentCoroutineContext().ensureActive()
+                    state.update { it.copy(complete = true) }
+                } catch (_: CancellationException) {
+                    setError(InvalidRestore(BackupError.CANCELLED), false)
+                } catch (e: Exception) {
+                    val error = BackupError.from(e)
+                    if (!state.value.libraryComplete &&
+                        (error == BackupError.BUSY || error == BackupError.PENDING_TRACKING)
+                    ) {
+                        // These refusals happen before library mutation; retain authenticated data for retry.
+                        prepared = value
+                        state.update {
+                            it.copy(error = InvalidRestore(error), canRestore = true, applicationStarted = false)
+                        }
+                    } else {
+                        setError(InvalidRestore(error), false)
+                    }
+                }
+            }.also { job ->
+                job.invokeOnCompletion { cause ->
+                    state.update {
+                        it.copy(
+                            working = false,
+                            complete = it.complete && cause == null,
+                            error = if (cause is CancellationException) {
+                                InvalidRestore(BackupError.CANCELLED)
+                            } else {
+                                it.error
+                            },
+                            visualPreferences = if (it.visualPreferences == VisualPreferenceImport.PENDING) {
+                                VisualPreferenceImport.FAILED
+                            } else {
+                                it.visualPreferences
+                            },
+                        )
+                    }
+                }
+            }
+            return false
+        }
         BackupRestoreJob.start(
             workManager = context.workManager,
             uri = uri.toUri(),
             options = state.value.options,
         )
+        return true
     }
 
     private suspend fun validate(uri: Uri) {
@@ -240,10 +605,26 @@ class RestoreBackupViewModel(
 
     @Immutable
     data class State(
+        val protectedBackup: Boolean = false,
+        val needsPassword: Boolean = false,
+        val working: Boolean = false,
+        val applicationStarted: Boolean = false,
+        val complete: Boolean = false,
+        val libraryComplete: Boolean = false,
+        val visualPreferences: VisualPreferenceImport = VisualPreferenceImport.NOT_SELECTED,
         val error: Any? = null,
         val canRestore: Boolean = false,
         val options: RestoreOptions = RestoreOptions(),
-    )
+    ) {
+        val failure: BackupError? get() = (error as? InvalidRestore)?.error
+    }
+}
+
+enum class VisualPreferenceImport {
+    NOT_SELECTED,
+    PENDING,
+    COMPLETE,
+    FAILED,
 }
 
 private data class MissingRestoreComponents(

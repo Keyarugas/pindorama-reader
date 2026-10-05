@@ -1,6 +1,7 @@
 package tachiyomi.domain.manga.interactor
 
 import dev.zacsweers.metro.Inject
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
@@ -10,68 +11,66 @@ class SetMangaChapterFlags(
     private val mangaRepository: MangaRepository,
 ) {
 
-    suspend fun awaitSetDownloadedFilter(manga: Manga, flag: Long): Boolean {
-        return mangaRepository.update(
-            MangaUpdate(
-                id = manga.id,
-                chapterFlags = manga.chapterFlags.setFlag(flag, Manga.CHAPTER_DOWNLOADED_MASK),
-            ),
-        )
+    suspend fun awaitSetDownloadedFilter(
+        manga: Manga,
+        flag: Long,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Boolean = update(manga, generation) {
+        it.chapterFlags.setFlag(flag, Manga.CHAPTER_DOWNLOADED_MASK)
     }
 
-    suspend fun awaitSetUnreadFilter(manga: Manga, flag: Long): Boolean {
-        return mangaRepository.update(
-            MangaUpdate(
-                id = manga.id,
-                chapterFlags = manga.chapterFlags.setFlag(flag, Manga.CHAPTER_UNREAD_MASK),
-            ),
-        )
+    suspend fun awaitSetUnreadFilter(
+        manga: Manga,
+        flag: Long,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Boolean = update(manga, generation) {
+        it.chapterFlags.setFlag(flag, Manga.CHAPTER_UNREAD_MASK)
     }
 
-    suspend fun awaitSetBookmarkFilter(manga: Manga, flag: Long): Boolean {
-        return mangaRepository.update(
-            MangaUpdate(
-                id = manga.id,
-                chapterFlags = manga.chapterFlags.setFlag(flag, Manga.CHAPTER_BOOKMARKED_MASK),
-            ),
-        )
+    suspend fun awaitSetBookmarkFilter(
+        manga: Manga,
+        flag: Long,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Boolean = update(manga, generation) {
+        it.chapterFlags.setFlag(flag, Manga.CHAPTER_BOOKMARKED_MASK)
     }
 
-    suspend fun awaitSetDisplayMode(manga: Manga, flag: Long): Boolean {
-        return mangaRepository.update(
-            MangaUpdate(
-                id = manga.id,
-                chapterFlags = manga.chapterFlags.setFlag(flag, Manga.CHAPTER_DISPLAY_MASK),
-            ),
-        )
+    suspend fun awaitSetDisplayMode(
+        manga: Manga,
+        flag: Long,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Boolean = update(manga, generation) {
+        it.chapterFlags.setFlag(flag, Manga.CHAPTER_DISPLAY_MASK)
     }
 
-    suspend fun awaitSetSortingModeOrFlipOrder(manga: Manga, flag: Long): Boolean {
-        val newFlags = manga.chapterFlags.let {
-            if (manga.sorting == flag) {
-                // Just flip the order
-                val orderFlag = if (manga.sortDescending()) {
-                    Manga.CHAPTER_SORT_ASC
-                } else {
-                    Manga.CHAPTER_SORT_DESC
-                }
-                it.setFlag(orderFlag, Manga.CHAPTER_SORT_DIR_MASK)
-            } else {
-                // Set new flag with ascending order
-                it
-                    .setFlag(flag, Manga.CHAPTER_SORTING_MASK)
-                    .setFlag(Manga.CHAPTER_SORT_ASC, Manga.CHAPTER_SORT_DIR_MASK)
-            }
+    suspend fun awaitSetSortingModeOrFlipOrder(
+        manga: Manga,
+        flag: Long,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Boolean = update(manga, generation) { current ->
+        if (current.sorting == flag) {
+            val direction = if (current.sortDescending()) Manga.CHAPTER_SORT_ASC else Manga.CHAPTER_SORT_DESC
+            current.chapterFlags.setFlag(direction, Manga.CHAPTER_SORT_DIR_MASK)
+        } else {
+            current.chapterFlags
+                .setFlag(flag, Manga.CHAPTER_SORTING_MASK)
+                .setFlag(Manga.CHAPTER_SORT_ASC, Manga.CHAPTER_SORT_DIR_MASK)
         }
-        return mangaRepository.update(
-            MangaUpdate(
-                id = manga.id,
-                chapterFlags = newFlags,
-            ),
-        )
     }
 
-    suspend fun awaitSetAllFlags(
+    private suspend fun update(expected: Manga, generation: Long, flags: (Manga) -> Long): Boolean {
+        val coordinator = LibraryOperationCoordinator.shared
+        return coordinator.operation {
+            if (generation != coordinator.generation) return@operation false
+            val current = mangaRepository.getMangaByUrlAndSourceId(expected.url, expected.source)
+                ?.takeIf { it.id == expected.id && it.source == expected.source && it.url == expected.url }
+                ?: return@operation false
+            mangaRepository.update(MangaUpdate(id = current.id, chapterFlags = flags(current)))
+        }
+    }
+
+    // Only the coordinated defaults operation uses this primitive, including its entire batch.
+    internal suspend fun awaitSetAllFlags(
         mangaId: Long,
         unreadFilter: Long,
         downloadedFilter: Long,

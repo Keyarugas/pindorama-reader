@@ -56,7 +56,7 @@ class CategoryScreen : Screen() {
             is CategoryDialog.Rename -> {
                 CategoryRenameDialog(
                     onDismissRequest = viewModel::dismissDialog,
-                    onRename = { viewModel.renameCategory(dialog.category, it) },
+                    onRename = { viewModel.renameCategory(dialog.category, it, dialog.generation) },
                     categories = successState.categories.fastMap { it.name },
                     category = dialog.category.name,
                 )
@@ -64,7 +64,7 @@ class CategoryScreen : Screen() {
             is CategoryDialog.Delete -> {
                 CategoryDeleteDialog(
                     onDismissRequest = viewModel::dismissDialog,
-                    onDelete = { viewModel.deleteCategory(dialog.category.id) },
+                    onDelete = { viewModel.deleteCategory(dialog.category.id, dialog.generation) },
                     category = dialog.category.name,
                 )
             }

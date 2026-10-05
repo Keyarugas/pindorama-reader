@@ -9,8 +9,12 @@ import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import logcat.LogPriority
 import mihon.domain.source.models.RemoteMangaUpdate
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
@@ -40,10 +44,9 @@ class UpdateMangaFromRemote(
         manualFetch: Boolean = false,
         fetchWindow: Pair<Long, Long> = Pair(0, 0),
     ): Result<RemoteMangaUpdate> {
-        val source = sourceManager.getOrStub(manga.source)
-        return invoke(
-            source = source,
-            manga = manga,
+        return update(
+            source = null,
+            expected = manga,
             fetchDetails = fetchDetails,
             fetchChapters = fetchChapters,
             manualFetch = manualFetch,
@@ -57,29 +60,51 @@ class UpdateMangaFromRemote(
         fetchChapters: Boolean = false,
         manualFetch: Boolean = false,
         fetchWindow: Pair<Long, Long> = Pair(0, 0),
+    ): Result<RemoteMangaUpdate> = update(source, manga, fetchDetails, fetchChapters, manualFetch, fetchWindow)
+
+    private class StaleState : Exception("MANGA_STATE_CHANGED")
+
+    private suspend fun update(
+        source: Source?,
+        expected: Manga,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+        manualFetch: Boolean,
+        fetchWindow: Pair<Long, Long> = Pair(0, 0),
     ): Result<RemoteMangaUpdate> {
         return try {
-            val chapters = chapterRepository.getChapterByMangaId(manga.id)
-                .sortedBy { it.sourceOrder }
-            val update = withIOContext {
-                source.getMangaUpdate(
-                    manga = manga.toSManga(),
-                    chapters = chapters.map(Chapter::toSChapter),
-                    fetchDetails = fetchDetails,
-                    fetchChapters = fetchChapters,
+            LibraryOperationCoordinator.shared.operation {
+                // Caller snapshots supply identity only. Read state after admission, before network or writes.
+                val manga = mangaRepository.getMangaByUrlAndSourceId(expected.url, expected.source)
+                    ?.takeIf { it.id == expected.id && it.source == expected.source && it.url == expected.url }
+                    ?: throw StaleState()
+                val currentSource = source ?: sourceManager.getOrStub(manga.source)
+                if (currentSource.id != manga.source) throw StaleState()
+                val chapters = chapterRepository.getChapterByMangaId(manga.id)
+                    .sortedBy { it.sourceOrder }
+                val update = withIOContext {
+                    currentSource.getMangaUpdate(
+                        manga = manga.toSManga(),
+                        chapters = chapters.map(Chapter::toSChapter),
+                        fetchDetails = fetchDetails,
+                        fetchChapters = fetchChapters,
+                    )
+                }
+                currentCoroutineContext().ensureActive()
+                awaitUpdateFromSource(manga, update.manga, manualFetch)
+                val newChapters = syncChaptersWithSource.await(
+                    rawSourceChapters = update.chapters,
+                    manga = manga,
+                    source = currentSource,
+                    manualFetch = manualFetch,
+                    fetchWindow = fetchWindow,
                 )
-            }
-            awaitUpdateFromSource(manga, update.manga, manualFetch)
-            val newChapters = syncChaptersWithSource.await(
-                rawSourceChapters = update.chapters,
-                manga = manga,
-                source = source,
-                manualFetch = manualFetch,
-                fetchWindow = fetchWindow,
-            )
-            val updatedManga = mangaRepository.getMangaById(manga.id)
+                val updatedManga = mangaRepository.getMangaById(manga.id)
 
-            Result.success(RemoteMangaUpdate(manga = updatedManga, newChapters = newChapters))
+                Result.success(RemoteMangaUpdate(manga = updatedManga, newChapters = newChapters))
+            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
             Result.failure(e)

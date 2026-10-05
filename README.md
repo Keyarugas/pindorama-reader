@@ -1,71 +1,110 @@
 # Pindorama!
 
-**Mais histórias para um Brasil maior.**
+Um leitor Android de mangás, manhwas, webtoons e conteúdo compatível, baseado no Mihon.
 
-Leitor Android de mangás, manhwas, webtoons e conteúdos compatíveis, com uma interface própria e atenção especial à privacidade. O Pindorama! é um **fork independente do [Mihon](https://github.com/mihonapp/mihon)**: preserva a base do projeto original e desenvolve funcionalidades próprias, sem afiliação ou suporte oficial da equipe Mihon.
+**Status: Alpha · Android 8.0 ou superior · Apache 2.0**
 
-**Estado:** desenvolvimento em fase Alpha · **Android 8.0+** · **Licença [Apache 2.0](LICENSE)** · **Gratuito e de código aberto**
+Pindorama! é um fork independente do [Mihon](https://github.com/mihonapp/mihon).
+Não é afiliado nem oficialmente mantido pela equipe Mihon. Mihon continua sendo
+o projeto original, ao qual pertencem os créditos do trabalho herdado.
+O projeto preserva a licença [Apache 2.0](LICENSE).
 
-> **Atenção:** o código da branch principal pode incluir recursos experimentais ainda ausentes dos APKs publicados. Uma funcionalidade em desenvolvimento não é uma garantia de segurança nem significa que já esteja disponível para uso cotidiano. Guarde uma cópia independente dos seus dados antes de testar versões Alpha.
+O Pindorama ainda está em desenvolvimento. Esta versão Alpha pode conter falhas;
+mantenha backups da sua biblioteca antes de testar novas versões.
 
-## O que o Pindorama acrescenta
+## Recursos herdados do Mihon
 
-### Leitura e identidade visual
+- Leitura de conteúdo local e leitor configurável, com diferentes modos e direções de leitura.
+- Biblioteca organizada em categorias e atualização programada de capítulos.
+- Temas claros e escuros e criação/restauração de backups.
+- Integração com serviços de acompanhamento, como MyAnimeList, AniList, Kitsu e MangaUpdates.
+- Compatibilidade com extensões do ecossistema herdado do Mihon.
 
-- Página **Início** com “Continuar lendo”, acesso à obra e retomada do capítulo, atualizações recentes e resumo da atividade de leitura.
-- Navegação com Início, Biblioteca, Histórico, Navegar e Mais.
-- Identidade visual própria, tema claro/escuro e apresentação editorial na página inicial.
-- Leitor, organização da biblioteca, histórico, categorias e demais recursos de leitura herdados do Mihon.
+## O que muda no Pindorama
 
-### Privacidade no aplicativo
+- Identidade própria, com applicationId base `app.pindorama.reader`.
+- Tema Pindorama como padrão quando não existe uma preferência de tema salva.
+- Identidade visual própria, com novo ícone do launcher e branding no splash e cabeçalhos.
+- Biblioteca Privada com autenticação independente do bloqueio do aplicativo.
+- Proteções de tela, privacidade de notificações e sanitização de diagnósticos.
+- Firebase Analytics, Crashlytics, `google-services.json` e a infraestrutura Gradle
+  relacionada foram removidos, assim como código, preferências e textos associados.
+  O classpath de runtime atual não inclui Firebase ou Google Play Services.
+- Criação e restauração de backups protegidos por senha disponíveis nas configurações.
+- Atualizador automático do Mihon desabilitado; não há atualizador próprio nesta etapa.
+- Ajuste da dependência FlexibleAdapter para um artefato disponível no Maven Central.
 
-- **Bloqueio do aplicativo** usando biometria ou credencial do Android, com opções de bloqueio por inatividade, ao apagar a tela e proteção de conteúdo na tela/visão de aplicativos recentes.
-- **Biblioteca Privada:** obras marcadas como privadas ficam ocultas em superfícies locais compatíveis até que o usuário solicite e conclua uma autenticação **separada** do desbloqueio global. A seção “Privadas” reúne essas obras sem alterar suas categorias originais.
-- **Notificações:** níveis Normal, Discreto e Privado para reduzir a exposição de informações no sistema; notificações de obras privadas recebem tratamento mais restritivo.
-- **Diagnósticos:** redução de informações sensíveis em logs HTTP e relatórios nos caminhos adaptados.
-- Firebase Analytics/Crashlytics e o atualizador do Mihon foram desabilitados na configuração do Pindorama. **Não há atualização automática própria implementada nesta etapa.**
+## Fontes, extensões e privacidade
 
-**Limites importantes:** ocultar uma obra não criptografa o banco de dados, as capas, os downloads ou outros arquivos locais. Extensões, fontes, serviços de rastreamento e o próprio sistema Android podem processar informações fora das proteções da interface. Notificações já visualizadas ou dados previamente compartilhados com outros aplicativos não podem ser recuperados retroativamente. O Pindorama não promete anonimato nem proteção contra aparelho comprometido.
+Extensões e fontes são componentes externos e não fazem parte do Pindorama.
+O aplicativo não fornece nem hospeda conteúdo. Disponibilidade e funcionamento de
+cada extensão dependem dos seus mantenedores e do serviço acessado; a compatibilidade
+com o ecossistema não garante o funcionamento de todas as extensões.
 
-Para detalhes e limites técnicos, consulte [Biblioteca Privada](docs/PRIVATE_LIBRARY_0.3.md), [sessão e proteção de tela](docs/PRIVATE_SESSION_0.3.md) e [notas sobre diagnósticos](docs/PRIVACY_LOGS_FOLLOWUP.md).
+A remoção de Firebase Analytics/Crashlytics não impede conexões necessárias às
+fontes e aos serviços de acompanhamento que você utiliza. Extensões, fontes e
+serviços externos podem tratar dados fora das proteções do Pindorama e possuem
+suas próprias práticas de privacidade. O aplicativo não promete anonimato nem
+ausência de comunicação de rede ou telemetria de componentes externos.
 
-### Backups: situação do código e da distribuição
+A Biblioteca Privada controla a apresentação e o acesso ao conteúdo no aplicativo;
+não criptografa o banco local, capas, caches ou downloads. Essas proteções não
+substituem a segurança do dispositivo e não protegem contra root, sistema
+comprometido ou código de extensões executado no processo.
 
-- **Backup convencional:** o formato herdado continua disponível para dados públicos e outros casos permitidos; é comprimido, **não criptografado**. A exportação convencional de obras privadas selecionadas é bloqueada para evitar uma exposição acidental. Mesmo um backup convencional sem obras privadas pode conter dados sensíveis.
-- **Motor de criptografia isolado (código da branch principal):** existe uma implementação experimental para um formato protegido, com Argon2id e AES-256-GCM, acompanhada de testes e documentação. **Esse motor isolado, por si só, não oferece ainda um fluxo completo de criação/restauração na interface do aplicativo.**
-- A integração da criação e da restauração protegidas, a recuperação de falhas e a coordenação com tarefas automáticas estão em desenvolvimento e exigem validação adicional antes de serem anunciadas como recursos disponíveis em uma distribuição pública.
-- A senha de um futuro backup protegido será necessária para recuperá-lo. O bloqueio biométrico do aplicativo não substitui essa senha.
+## Backup e restauração
 
-Leia [proteções do backup convencional](docs/backup-guardrails.md), [especificação do motor criptográfico](docs/BACKUP_CRYPTO_0.4.md) e [revisão técnica](docs/BACKUP_CRYPTO_REVIEW_0.4.md). A revisão interna não constitui auditoria independente ou certificação de segurança.
+Backups protegidos por senha podem ser criados e restaurados pela interface.
+A restauração protegida foi testada em dispositivo Android real. A senha não é
+persistida; guarde-a com cuidado, pois perdê-la impede a restauração do arquivo.
+A interface distingue senha incorreta, arquivo inválido, formato incompatível,
+operação ocupada e cancelamento, com nova tentativa em estados recuperáveis.
 
-## Recursos herdados e conteúdo externo
+A criação usa uma cópia lógica consistente dos dados. A restauração coordena as
+operações concorrentes relevantes para evitar gravações conflitantes ou resultados
+antigos. Isso não representa uma garantia contra toda falha de armazenamento ou
+interrupção do processo. A proteção do arquivo de backup não criptografa os dados
+locais do aplicativo. Backups convencionais continuam disponíveis e podem conter
+dados sensíveis sem criptografia. Mantenha cópias seguras antes de atualizar.
 
-O Pindorama preserva recursos da base Mihon, como leitura local, modos configuráveis de leitura, biblioteca, histórico, categorias, downloads e integração com serviços de acompanhamento compatíveis.
+## Distribuição e desenvolvimento
 
-**O aplicativo não fornece nem hospeda obras.** Fontes e extensões são mantidas por terceiros e podem estabelecer conexões próprias. A compatibilidade com o ecossistema herdado não garante que uma extensão específica funcione ou seja confiável. Cabe ao usuário observar a legislação aplicável e as condições dos serviços acessados.
+O repositório do projeto é [Keyarugas/pindorama-reader](https://github.com/Keyarugas/pindorama-reader).
+A última release pública é a [Pindorama! 0.2 Alpha 1](https://github.com/Keyarugas/pindorama-reader/releases/tag/v0.2.0-alpha.1).
+O código atual está à frente dessa release e prepara a Pindorama! 0.5 Alpha 1;
+os ciclos 0.3 e 0.4 foram desenvolvimento interno, sem releases públicas.
+Os APKs debug gerados pela CI são artefatos de teste, não releases de distribuição.
+O signing próprio de release já está configurado; consulte
+[docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md). A CI atual gera APKs debug e
+não publica releases automaticamente.
 
-## Downloads e versões
+Use as [Issues](https://github.com/Keyarugas/pindorama-reader/issues) para relatos
+e as [Pull Requests](https://github.com/Keyarugas/pindorama-reader/pulls) para contribuições.
 
-As versões públicas experimentais são disponibilizadas em [GitHub Releases](https://github.com/Keyarugas/pindorama-reader/releases). Verifique as notas e os arquivos de **cada** versão antes de instalar; recursos presentes na branch principal podem não integrar o APK mais recente.
+Para compilar, use JDK 21 e o Android SDK configurado no ambiente:
 
-- [Pindorama! 0.2 Alpha 1](https://github.com/Keyarugas/pindorama-reader/releases/tag/v0.2.0-alpha.1): primeira versão pública com a nova página Início.
-- [Pindorama! 0.1 Alpha 3](https://github.com/Keyarugas/pindorama-reader/releases/tag/v0.1.0-alpha.3): versão experimental anterior, com a identidade e o tema próprios.
+```sh
+./gradlew spotlessCheck
+./gradlew testDebugUnitTest
+./gradlew :app:assembleDebug
+```
 
-Prefira baixar APKs exclusivamente das Releases deste repositório e confira as informações publicadas junto ao arquivo. Builds debug da CI são artefatos de teste, não lançamentos estáveis. **Não há ainda um canal de atualização automática do Pindorama.**
+Consulte [CONTRIBUTING.md](CONTRIBUTING.md) e o
+[Código de Conduta](CODE_OF_CONDUCT.md). Bugs e contribuições do Pindorama devem
+ser encaminhados às Issues e Pull Requests deste repositório.
 
-## Desenvolvimento e contribuições
+## Relação com o projeto original
 
-Requisitos para compilar localmente: **JDK 21**, Android SDK e ambiente Android/Gradle configurado.
+O remoto `upstream` identifica [mihonapp/mihon](https://github.com/mihonapp/mihon).
+As alterações do fork são mantidas em commits próprios; atualizações do upstream
+precisam ser revisadas e validadas antes de serem incorporadas.
 
-    ./gradlew spotlessCheck
-    ./gradlew testDebugUnitTest
-    ./gradlew :app:assembleDebug
+Os links abaixo pertencem ao **Mihon original**, não ao suporte do Pindorama:
 
-Para propor mudanças ou relatar problemas, utilize as [Issues](https://github.com/Keyarugas/pindorama-reader/issues) e [Pull Requests](https://github.com/Keyarugas/pindorama-reader/pulls) **deste repositório**. Antes de compartilhar logs ou capturas, remova títulos de obras privadas, URLs com tokens, credenciais e outros dados pessoais. Leia [CONTRIBUTING.md](CONTRIBUTING.md) e o [Código de Conduta](CODE_OF_CONDUCT.md).
-
-O projeto segue a licença [Apache 2.0](LICENSE) e mantém os créditos e avisos de autoria da base herdada. Atualizações do [Mihon original](https://github.com/mihonapp/mihon) são incorporadas após revisão, não automaticamente. Pedidos de suporte relativos às alterações do Pindorama devem ser encaminhados aqui, não à equipe do Mihon.
-
----
+- [Site e documentação](https://mihon.app/)
+- [Site: código-fonte](https://github.com/mihonapp/website/)
+- [Biblioteca bitmap.kt](https://github.com/mihonapp/bitmap.kt/)
+- [Contribuição e traduções upstream](https://mihon.app/docs/contribute)
 
 ### Credits
 

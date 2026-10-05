@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import kotlinx.coroutines.CancellationException
 import mihon.domain.manga.model.toDomainManga
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
@@ -54,6 +55,7 @@ abstract class BaseSourcePagingSource(
 
         return try {
             val source = source()
+            val generation = LibraryOperationCoordinator.shared.generation
             val mangasPage = withIOContext {
                 requestNextPage(source, page.toInt())
                     .takeIf { it.mangas.isNotEmpty() }
@@ -62,8 +64,12 @@ abstract class BaseSourcePagingSource(
 
             val manga = mangasPage.mangas
                 .map { it.toDomainManga(source.id) }
-                .filter { seenManga.add(it.url) }
-                .let { networkToLocalManga(it) }
+                .distinctBy { it.url }
+                .filterNot { it.url in seenManga }
+                .let { networkToLocalManga(it, generation) }
+                // Drop this page without requesting it again or caching stale identities.
+                ?: return LoadResult.Page(data = emptyList(), prevKey = null, nextKey = null)
+            seenManga.addAll(manga.map { it.url })
 
             LoadResult.Page(
                 data = manga,

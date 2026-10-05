@@ -43,8 +43,12 @@ internal object ConventionalBackupReader {
                     result.readByteArray()
                 }
             }
-            currentCoroutineContext().ensureActive()
-            return parser.decodeFromByteArray(Backup.serializer(), bytes)
+            try {
+                currentCoroutineContext().ensureActive()
+                return parser.decodeFromByteArray(Backup.serializer(), bytes)
+            } finally {
+                bytes.fill(0)
+            }
         } catch (e: BackupException) {
             throw e
         } catch (_: SerializationException) {

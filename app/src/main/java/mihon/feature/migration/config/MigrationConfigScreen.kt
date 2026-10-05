@@ -62,6 +62,7 @@ import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyListState
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.service.SourceManager
@@ -75,6 +76,8 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.shouldExpandFAB
 
 class MigrationConfigScreen(private val mangaIds: Collection<Long>) : Screen() {
+
+    private val generation = LibraryOperationCoordinator.shared.generation
 
     constructor(mangaId: Long) : this(listOf(mangaId))
 
@@ -94,9 +97,9 @@ class MigrationConfigScreen(private val mangaIds: Collection<Long>) : Screen() {
                 return
             }
             val screen = if (mangaId == null) {
-                MigrationListScreen(mangaIds, extraSearchQuery)
+                MigrationListScreen(mangaIds, extraSearchQuery, generation)
             } else {
-                MigrateSearchScreen(mangaId)
+                MigrateSearchScreen(mangaId, generation)
             }
             navigator.replace(screen)
         }

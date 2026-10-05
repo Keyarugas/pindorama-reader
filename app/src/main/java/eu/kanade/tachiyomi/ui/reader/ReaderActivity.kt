@@ -220,6 +220,9 @@ class ReaderActivity : BaseActivity() {
         viewModel.eventFlow
             .onEach { event ->
                 when (event) {
+                    ReaderViewModel.Event.WriteRejected -> {
+                        toast(MR.strings.pindorama_reader_write_rejected)
+                    }
                     ReaderViewModel.Event.ReloadViewerChapters -> {
                         viewModel.state.value.viewerChapters?.let(::setChapters)
                     }

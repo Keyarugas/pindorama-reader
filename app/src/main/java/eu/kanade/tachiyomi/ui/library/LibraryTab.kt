@@ -277,7 +277,7 @@ data object LibraryTab : Tab {
                     },
                     onConfirm = { include, exclude ->
                         viewModel.clearSelection()
-                        viewModel.setMangaCategories(dialog.manga, include, exclude)
+                        viewModel.setMangaCategories(dialog.manga, include, exclude, dialog.generation)
                     },
                 )
             }
@@ -286,7 +286,7 @@ data object LibraryTab : Tab {
                     containsLocalManga = dialog.manga.any(Manga::isLocal),
                     onDismissRequest = onDismissRequest,
                     onConfirm = { deleteManga, deleteChapter ->
-                        viewModel.removeMangas(dialog.manga, deleteManga, deleteChapter)
+                        viewModel.removeMangas(dialog.manga, deleteManga, deleteChapter, dialog.generation)
                         viewModel.clearSelection()
                     },
                 )

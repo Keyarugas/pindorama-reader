@@ -2,7 +2,9 @@ package eu.kanade.domain.chapter.interactor
 
 import dev.zacsweers.metro.Inject
 import eu.kanade.domain.download.interactor.DeleteDownload
+import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
+import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
@@ -20,59 +22,95 @@ class SetReadStatus(
     private val chapterRepository: ChapterRepository,
 ) {
 
-    private val mapper = { chapter: Chapter, read: Boolean ->
-        ChapterUpdate(
-            read = read,
-            lastPageRead = if (!read) 0 else null,
-            id = chapter.id,
-        )
-    }
-
-    suspend fun await(read: Boolean, vararg chapters: Chapter): Result = withNonCancellableContext {
-        val chaptersToUpdate = chapters.filter {
-            when (read) {
-                true -> !it.read
-                false -> it.read || it.lastPageRead > 0
+    suspend fun await(
+        read: Boolean,
+        vararg chapters: Chapter,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) {
+        chapters.distinctBy { it.id }.mapNotNull { expected ->
+            chapterRepository.getChapterById(expected.id)?.takeIf {
+                it.id == expected.id && it.mangaId == expected.mangaId && it.url == expected.url
             }
         }
-        if (chaptersToUpdate.isEmpty()) {
-            return@withNonCancellableContext Result.NoChapters
-        }
+    }
 
-        try {
-            chapterRepository.updateAll(
-                chaptersToUpdate.map { mapper(it, read) },
-            )
-        } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e)
-            return@withNonCancellableContext Result.InternalError(e)
-        }
+    suspend fun await(
+        mangaId: Long,
+        read: Boolean,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) {
+        chapterRepository.getChapterByMangaId(mangaId)
+    }
 
-        if (read && downloadPreferences.removeAfterMarkedAsRead.get()) {
-            chaptersToUpdate
-                .groupBy { it.mangaId }
-                .forEach { (mangaId, chapters) ->
-                    deleteDownload.awaitAll(
-                        manga = mangaRepository.getMangaById(mangaId),
-                        chapters = chapters.toTypedArray(),
-                    )
+    suspend fun await(
+        manga: Manga,
+        read: Boolean,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) { loadCurrent(manga) }
+
+    suspend fun awaitAll(mangas: List<Manga>, read: Boolean, generation: Long): Result = apply(read, generation) {
+        mangas.distinctBy { it.id }.flatMap { loadCurrent(it) }
+    }
+
+    private suspend fun loadCurrent(expected: Manga): List<Chapter> {
+        val current = mangaRepository.getMangaByUrlAndSourceId(expected.url, expected.source)
+            ?.takeIf { it.id == expected.id && it.source == expected.source && it.url == expected.url }
+            ?: return emptyList()
+        return chapterRepository.getChapterByMangaId(current.id)
+    }
+
+    suspend fun await(
+        read: Boolean,
+        mangaId: Long,
+        chapterUrls: Array<String>,
+        generation: Long = LibraryOperationCoordinator.shared.generation,
+    ): Result = apply(read, generation) {
+        chapterUrls.distinct().mapNotNull { url ->
+            chapterRepository.getChapterByUrlAndMangaId(url, mangaId)?.takeIf {
+                it.mangaId == mangaId && it.url == url
+            }
+        }
+    }
+
+    private suspend fun apply(read: Boolean, generation: Long, loadCurrent: suspend () -> List<Chapter>): Result {
+        val coordinator = LibraryOperationCoordinator.shared
+        return withNonCancellableContext {
+            coordinator.operation {
+                if (generation != coordinator.generation) return@operation Result.NoChapters
+                val chaptersToUpdate = loadCurrent().filter {
+                    if (read) !it.read else it.read || it.lastPageRead > 0
                 }
+                if (chaptersToUpdate.isEmpty()) return@operation Result.NoChapters
+
+                try {
+                    chapterRepository.updateAll(
+                        chaptersToUpdate.map {
+                            ChapterUpdate(
+                                id = it.id,
+                                read = read,
+                                lastPageRead = if (read) null else 0,
+                            )
+                        },
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e)
+                    return@operation Result.InternalError(e)
+                }
+
+                if (read && downloadPreferences.removeAfterMarkedAsRead.get()) {
+                    chaptersToUpdate.groupBy { it.mangaId }.forEach { (mangaId, chapters) ->
+                        deleteDownload.awaitAll(
+                            manga = mangaRepository.getMangaById(mangaId),
+                            chapters = chapters.toTypedArray(),
+                        )
+                    }
+                }
+                Result.Success
+            }
         }
-
-        Result.Success
     }
-
-    suspend fun await(mangaId: Long, read: Boolean): Result = withNonCancellableContext {
-        await(
-            read = read,
-            chapters = chapterRepository
-                .getChapterByMangaId(mangaId)
-                .toTypedArray(),
-        )
-    }
-
-    suspend fun await(manga: Manga, read: Boolean) =
-        await(manga.id, read)
 
     sealed interface Result {
         data object Success : Result

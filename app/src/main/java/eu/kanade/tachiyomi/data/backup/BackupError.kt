@@ -9,6 +9,14 @@ import java.io.IOException
 /** Diagnostics must never retain an exception message, cause, URI or a user-supplied name. */
 enum class BackupError(val messageRes: StringResource) {
     PROTECTION_REQUIRED(MR.strings.pindorama_backup_protection_required),
+    INSUFFICIENT_RESOURCES(MR.strings.pindorama_backup_memory_insufficient),
+    INVALID_PASSWORD(MR.strings.pindorama_backup_password_invalid),
+    PASSWORD_MISMATCH(MR.strings.pindorama_backup_password_mismatch),
+    BUSY(MR.strings.backup_in_progress),
+    PENDING_TRACKING(MR.strings.pindorama_restore_pending_tracking),
+    PREFERENCE_RECOVERY_FAILED(MR.strings.pindorama_restore_preference_recovery_failed),
+    PROTECTED_FORMAT(MR.strings.pindorama_restore_format),
+    AUTHENTICATION_FAILED(MR.strings.pindorama_restore_authentication_failed),
     INVALID_FILE(MR.strings.pindorama_backup_invalid),
     READ_LIMIT(MR.strings.pindorama_backup_read_limit),
     IO(MR.strings.pindorama_backup_io_error),

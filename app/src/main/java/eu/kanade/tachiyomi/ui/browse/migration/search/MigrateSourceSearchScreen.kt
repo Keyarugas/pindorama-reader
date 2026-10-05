@@ -45,6 +45,7 @@ data class MigrateSourceSearchScreen(
     private val currentManga: Manga,
     private val sourceId: Long,
     private val query: String?,
+    private val generation: Long,
 ) : Screen() {
 
     @Composable
@@ -96,9 +97,19 @@ data class MigrateSourceSearchScreen(
                     .lastOrNull()
 
                 if (migrateListScreen == null) {
-                    viewModel.setDialog(BrowseSourceViewModel.Dialog.Migrate(target = it, current = currentManga))
+                    viewModel.setDialog(
+                        BrowseSourceViewModel.Dialog.Migrate(
+                            target = it,
+                            current = currentManga,
+                            generation = generation,
+                        ),
+                    )
                 } else {
-                    migrateListScreen.addMatchOverride(current = currentManga.id, target = it.id)
+                    migrateListScreen.addMatchOverride(
+                        current = currentManga.id,
+                        target = it.id,
+                        generation = generation,
+                    )
                     navigator.popUntil { screen -> screen is MigrationListScreen }
                 }
             }
@@ -141,6 +152,7 @@ data class MigrateSourceSearchScreen(
                 MigrateMangaDialog(
                     current = currentManga,
                     target = dialog.target,
+                    generation = dialog.generation,
                     // Initiated from the context of [currentManga] so we show [dialog.target].
                     onClickTitle = { navigator.push(MangaScreen(dialog.target.id)) },
                     onDismissRequest = onDismissRequest,

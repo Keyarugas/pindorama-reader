@@ -21,7 +21,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -55,7 +54,6 @@ import mihon.icons.materialsymbols.rounded.NewReleases
 import mihon.icons.materialsymbols.roundedfilled.Favorite
 import mihon.presentation.core.util.collectAsLazyPagingItems
 import tachiyomi.core.common.Constants
-import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -103,7 +101,6 @@ data class BrowseSourceScreen(
             return
         }
 
-        val scope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current
         val uriHandler = LocalUriHandler.current
         val snackbarHostState = remember { SnackbarHostState() }
@@ -224,17 +221,8 @@ data class BrowseSourceScreen(
                 onLocalSourceHelpClick = onHelpClick,
                 onMangaClick = { navigator.push((MangaScreen(it.id, true))) },
                 onMangaLongClick = { manga ->
-                    scope.launchIO {
-                        val duplicates = viewModel.getDuplicateLibraryManga(manga)
-                        when {
-                            manga.favorite -> viewModel.setDialog(BrowseSourceViewModel.Dialog.RemoveManga(manga))
-                            duplicates.isNotEmpty() -> viewModel.setDialog(
-                                BrowseSourceViewModel.Dialog.AddDuplicateManga(manga, duplicates),
-                            )
-                            else -> viewModel.addFavorite(manga)
-                        }
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    }
+                    viewModel.showMembershipDialog(manga)
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 },
             )
         }
@@ -254,9 +242,11 @@ data class BrowseSourceScreen(
                 DuplicateMangaDialog(
                     duplicates = dialog.duplicates,
                     onDismissRequest = onDismissRequest,
-                    onConfirm = { viewModel.addFavorite(dialog.manga) },
+                    onConfirm = { viewModel.addFavorite(dialog.manga, dialog.generation) },
                     onOpenManga = { navigator.push(MangaScreen(it.id)) },
-                    onMigrate = { viewModel.setDialog(BrowseSourceViewModel.Dialog.Migrate(dialog.manga, it)) },
+                    onMigrate = {
+                        viewModel.setDialog(BrowseSourceViewModel.Dialog.Migrate(dialog.manga, it, dialog.generation))
+                    },
                 )
             }
 
@@ -264,6 +254,7 @@ data class BrowseSourceScreen(
                 MigrateMangaDialog(
                     current = dialog.current,
                     target = dialog.target,
+                    generation = dialog.generation,
                     // Initiated from the context of [dialog.target] so we show [dialog.current].
                     onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
                     onDismissRequest = onDismissRequest,
@@ -273,7 +264,7 @@ data class BrowseSourceScreen(
                 RemoveMangaDialog(
                     onDismissRequest = onDismissRequest,
                     onConfirm = {
-                        viewModel.changeMangaFavorite(dialog.manga)
+                        viewModel.removeFavorite(dialog.manga, dialog.generation)
                     },
                     mangaToRemove = dialog.manga,
                 )
@@ -284,8 +275,7 @@ data class BrowseSourceScreen(
                     onDismissRequest = onDismissRequest,
                     onEditCategories = { navigator.push(CategoryScreen()) },
                     onConfirm = { include, _ ->
-                        viewModel.changeMangaFavorite(dialog.manga)
-                        viewModel.moveMangaToCategories(dialog.manga, include)
+                        viewModel.moveMangaToCategoriesAndAddToLibrary(dialog.manga, include, dialog.generation)
                     },
                 )
             }
