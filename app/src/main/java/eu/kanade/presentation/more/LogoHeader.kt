@@ -12,24 +12,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.R
 
 @Composable
 fun LogoHeader(
     iconPadding: PaddingValues = PaddingValues(),
+    iconSize: Dp = 64.dp,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_pindorama),
+            painter = painterResource(R.drawable.ic_pindorama_brand),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .padding(iconPadding)
-                .size(64.dp),
+                .size(iconSize),
         )
 
         HorizontalDivider()
