@@ -1152,6 +1152,7 @@
     <string name="pindorama_restore_policy">Experimental restoration. Security, credentials, source settings, repositories and automatic tasks stay configured locally. Only selected display preferences are imported. Interrupted application may leave partial changes. Keep other valid backups.</string>
     <string name="pindorama_restore_password">Enter the backup password. It is independent of app lock and biometrics. The password is not saved. Authentication and validation must finish before selecting restore options.</string>
     <string name="pindorama_restore_working">Processing backup. Please keep this screen open.</string>
+    <string name="pindorama_restore_busy">The library is busy. Wait for the current operation to finish, then try restoring again. No library data was imported.</string>
     <string name="pindorama_restore_complete">Selected supported data restored. Local security settings and automatic tasks were preserved.</string>
     <string name="pindorama_restore_partial">Restoration did not complete. Library data is applied in one transaction; if already committed, it can remain. Display preferences may need review. No automatic tasks were configured by this import.</string>
     <string name="pindorama_restore_preference_recovery_failed">Restoration failed and display preferences could not be fully recovered. Review local display settings. Library data may already have been committed.</string>

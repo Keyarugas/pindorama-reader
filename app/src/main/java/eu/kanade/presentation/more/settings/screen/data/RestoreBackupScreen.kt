@@ -137,7 +137,10 @@ class RestoreBackupScreen(
                     item {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text(stringResource(MR.strings.pindorama_restore_working), Modifier.padding(16.dp))
-                        TextButton(onClick = viewModel::cancel) { Text(stringResource(MR.strings.action_cancel)) }
+                        TextButton(onClick = {
+                            password = ""
+                            viewModel.cancel()
+                        }) { Text(stringResource(MR.strings.action_cancel)) }
                     }
                 }
                 if (state.complete) {
@@ -228,17 +231,15 @@ class RestoreBackupScreen(
                             }
 
                             is InvalidRestore -> {
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    appendLine(stringResource(MR.strings.invalid_backup_file))
-                                }
-
-                                appendLine()
-
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    appendLine(stringResource(MR.strings.invalid_backup_file_error))
-                                }
-                                appendLine(stringResource(error.error.messageRes))
-                                appendLine(error.error.name)
+                                appendLine(
+                                    stringResource(
+                                        if (error.error == BackupError.BUSY) {
+                                            MR.strings.pindorama_restore_busy
+                                        } else {
+                                            error.error.messageRes
+                                        },
+                                    ),
+                                )
                             }
 
                             else -> {
@@ -326,7 +327,13 @@ class RestoreBackupViewModel(
                 password.fill('\u0000')
                 if (cause is CancellationException) {
                     prepared = null
-                    state.update { it.copy(canRestore = false, needsPassword = true) }
+                    state.update {
+                        it.copy(
+                            error = InvalidRestore(BackupError.CANCELLED),
+                            canRestore = false,
+                            needsPassword = true,
+                        )
+                    }
                 }
                 state.update { it.copy(working = false) }
             }
@@ -336,7 +343,13 @@ class RestoreBackupViewModel(
     fun cancel() {
         operation?.cancel()
         prepared = null
-        state.update { it.copy(canRestore = false, needsPassword = it.protectedBackup && !it.applicationStarted) }
+        state.update {
+            it.copy(
+                error = if (it.working) InvalidRestore(BackupError.CANCELLED) else it.error,
+                canRestore = false,
+                needsPassword = it.protectedBackup && !it.applicationStarted,
+            )
+        }
     }
 
     override fun onCleared() {
@@ -384,7 +397,18 @@ class RestoreBackupViewModel(
                 } catch (_: CancellationException) {
                     setError(InvalidRestore(BackupError.CANCELLED), false)
                 } catch (e: Exception) {
-                    setError(InvalidRestore(BackupError.from(e)), false)
+                    val error = BackupError.from(e)
+                    if (!state.value.libraryComplete &&
+                        (error == BackupError.BUSY || error == BackupError.PENDING_TRACKING)
+                    ) {
+                        // These refusals happen before library mutation; retain authenticated data for retry.
+                        prepared = value
+                        state.update {
+                            it.copy(error = InvalidRestore(error), canRestore = true, applicationStarted = false)
+                        }
+                    } else {
+                        setError(InvalidRestore(error), false)
+                    }
                 }
             }.also { job ->
                 job.invokeOnCompletion { cause ->
@@ -392,6 +416,11 @@ class RestoreBackupViewModel(
                         it.copy(
                             working = false,
                             complete = it.complete && cause == null,
+                            error = if (cause is CancellationException) {
+                                InvalidRestore(BackupError.CANCELLED)
+                            } else {
+                                it.error
+                            },
                             visualPreferences = if (it.visualPreferences == VisualPreferenceImport.PENDING) {
                                 VisualPreferenceImport.FAILED
                             } else {
@@ -455,7 +484,9 @@ class RestoreBackupViewModel(
         val error: Any? = null,
         val canRestore: Boolean = false,
         val options: RestoreOptions = RestoreOptions(),
-    )
+    ) {
+        val failure: BackupError? get() = (error as? InvalidRestore)?.error
+    }
 }
 
 enum class VisualPreferenceImport {
