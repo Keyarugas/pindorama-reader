@@ -17956,7 +17956,6 @@ HSPLeu/kanade/tachiyomi/App;->access$getDisableIncognitoReceiver$p(Leu/kanade/ta
 HSPLeu/kanade/tachiyomi/App;->getBasePreferences()Leu/kanade/domain/base/BasePreferences;
 HSPLeu/kanade/tachiyomi/App;->getNetworkPreferences()Leu/kanade/tachiyomi/network/NetworkPreferences;
 HSPLeu/kanade/tachiyomi/App;->getPackageName()Ljava/lang/String;
-HSPLeu/kanade/tachiyomi/App;->getPrivacyPreferences()Leu/kanade/tachiyomi/core/security/PrivacyPreferences;
 HSPLeu/kanade/tachiyomi/App;->initializeMigrator()V
 HSPLeu/kanade/tachiyomi/App;->onCreate()V
 HSPLeu/kanade/tachiyomi/App;->onCreate(Landroidx/lifecycle/LifecycleOwner;)V
@@ -18020,10 +18019,6 @@ Leu/kanade/tachiyomi/App$special$$inlined$injectLazy$3$1;
 HSPLeu/kanade/tachiyomi/App$special$$inlined$injectLazy$3$1;-><init>()V
 Leu/kanade/tachiyomi/R$drawable;
 Leu/kanade/tachiyomi/R$style;
-Leu/kanade/tachiyomi/core/security/PrivacyPreferences;
-HSPLeu/kanade/tachiyomi/core/security/PrivacyPreferences;-><init>(Ltachiyomi/core/common/preference/PreferenceStore;)V
-HSPLeu/kanade/tachiyomi/core/security/PrivacyPreferences;->getAnalytics()Ltachiyomi/core/common/preference/Preference;
-HSPLeu/kanade/tachiyomi/core/security/PrivacyPreferences;->getCrashlytics()Ltachiyomi/core/common/preference/Preference;
 Leu/kanade/tachiyomi/core/security/SecurityPreferences;
 HSPLeu/kanade/tachiyomi/core/security/SecurityPreferences;-><init>(Ltachiyomi/core/common/preference/PreferenceStore;)V
 HSPLeu/kanade/tachiyomi/core/security/SecurityPreferences;->getSecureScreen()Ltachiyomi/core/common/preference/Preference;
@@ -18608,7 +18603,6 @@ HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$12(Luy/
 HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$13(Leu/kanade/tachiyomi/di/PreferenceModule;Luy/kohesive/injekt/api/InjektRegistrar;)Leu/kanade/domain/base/BasePreferences;
 HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$2(Luy/kohesive/injekt/api/InjektRegistrar;)Leu/kanade/domain/source/service/SourcePreferences;
 HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$3(Luy/kohesive/injekt/api/InjektRegistrar;)Leu/kanade/tachiyomi/core/security/SecurityPreferences;
-HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$4(Luy/kohesive/injekt/api/InjektRegistrar;)Leu/kanade/tachiyomi/core/security/PrivacyPreferences;
 HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$5(Luy/kohesive/injekt/api/InjektRegistrar;)Ltachiyomi/domain/library/service/LibraryPreferences;
 HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$8(Luy/kohesive/injekt/api/InjektRegistrar;)Leu/kanade/domain/track/service/TrackPreferences;
 HSPLeu/kanade/tachiyomi/di/PreferenceModule;->registerInjectables$lambda$9(Luy/kohesive/injekt/api/InjektRegistrar;)Ltachiyomi/domain/download/service/DownloadPreferences;
@@ -26104,12 +26098,6 @@ HSPLmihon/domain/migration/models/MigrationFlag$Companion;-><init>(Lkotlin/jvm/i
 Lmihon/domain/migration/usecases/MigrateMangaUseCase;
 Lmihon/domain/source/interactor/UpdateMangaFromRemote;
 Lmihon/domain/upcoming/interactor/GetUpcomingManga;
-Lmihon/telemetry/TelemetryConfig;
-HSPLmihon/telemetry/TelemetryConfig;-><clinit>()V
-HSPLmihon/telemetry/TelemetryConfig;-><init>()V
-HSPLmihon/telemetry/TelemetryConfig;->init(Landroid/content/Context;)V
-HSPLmihon/telemetry/TelemetryConfig;->setAnalyticsEnabled(Z)V
-HSPLmihon/telemetry/TelemetryConfig;->setCrashlyticsEnabled(Z)V
 Lnl/adaptivity/xmlutil/BaseXmlSerialDescriptor;
 HSPLnl/adaptivity/xmlutil/BaseXmlSerialDescriptor;-><init>(Lkotlinx/serialization/descriptors/SerialDescriptor;Ljavax/xml/namespace/QName;)V
 Lnl/adaptivity/xmlutil/ExtXmlSerialDescriptor;

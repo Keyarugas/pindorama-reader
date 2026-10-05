@@ -14,7 +14,6 @@ import eu.kanade.domain.track.service.DelayedTrackingUpdateJob
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.App
-import eu.kanade.tachiyomi.core.security.PrivacyPreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.create.BackupCreateJob
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
@@ -85,7 +84,6 @@ interface AppGraph : ViewModelGraph {
     val trackPreferences: TrackPreferences
     val backupPreferences: BackupPreferences
     val storagePreferences: StoragePreferences
-    val privacyPreferences: PrivacyPreferences
     val privateContentVisibility: eu.kanade.tachiyomi.ui.security.PrivateContentVisibility
     val securityPreferences: SecurityPreferences
     val downloadPreferences: DownloadPreferences
