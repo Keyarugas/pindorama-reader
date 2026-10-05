@@ -80,8 +80,8 @@ android {
     defaultConfig {
         applicationId = "app.pindorama.reader"
 
-        versionCode = 29
-        versionName = "0.1.0"
+        versionCode = 30
+        versionName = "0.5.0-alpha.1"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getLatestCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getLatestCommitSha()}\"")

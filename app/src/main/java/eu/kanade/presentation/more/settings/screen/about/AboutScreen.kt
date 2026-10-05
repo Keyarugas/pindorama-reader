@@ -264,7 +264,11 @@ object AboutScreen : Screen() {
                 }
             }
             else -> {
-                val channel = if (isFossBuildType) "FOSS" else "Stable"
+                val channel = when {
+                    isFossBuildType -> "FOSS"
+                    BuildConfig.VERSION_NAME.substringAfter('-', "").substringBefore('.') == "alpha" -> "Alpha"
+                    else -> "Stable"
+                }
                 "$channel v${BuildConfig.VERSION_NAME}".let {
                     if (withBuildDate) {
                         "$it (${getFormattedBuildTime()})"
