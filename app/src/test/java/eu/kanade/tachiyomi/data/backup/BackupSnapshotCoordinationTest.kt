@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 import tachiyomi.data.Database
@@ -168,14 +169,18 @@ class BackupSnapshotCoordinationTest {
             categories.insert(Category(0, "old category", 0, 0))
             category = categories.getAll().single { it.name == "old category" }
             mangas.setMangaCategories(manga.id, listOf(category.id))
+            database.excluded_scanlatorsQueries.insert(manga.id, "old scanlator")
             histories.upsertHistory(HistoryUpdate(chapter.id, Date(1000), 10))
             tracks.insert(Track(0, manga.id, 1, 10, null, "old track", 1.0, 10, 1, 0.0, "", 0, 0, false))
         }
 
-        suspend fun replaceState() {
+        suspend fun replaceState(betweenWrites: suspend () -> Unit = {}) {
             mangas.update(MangaUpdate(manga.id, title = "restored"))
+            betweenWrites()
             chapters.update(ChapterUpdate(chapter.id, name = "restored chapter", read = true))
             categories.updateName(category.id, "restored category")
+            database.excluded_scanlatorsQueries.remove(manga.id, listOf("old scanlator"))
+            database.excluded_scanlatorsQueries.insert(manga.id, "restored scanlator")
             histories.upsertHistory(HistoryUpdate(chapter.id, Date(2000), 20))
             tracks.insert(tracks.getTracksByMangaId(manga.id).single().copy(lastChapterRead = 5.0))
         }
@@ -215,21 +220,17 @@ class BackupSnapshotCoordinationTest {
             }
             val backup = async(start = CoroutineStart.UNDISPATCHED) { t.creator.backup(t.uri, options) }
             history.await()
-            var applied = false
-            val exclusive = launch(start = CoroutineStart.UNDISPATCHED) {
-                coordinator.exclusive {
-                    t.replaceState()
-                    applied = true
-                }
+            assertThrows<LibraryOperationCoordinator.Unavailable> {
+                coordinator.exclusive { error("unexpected") }
             }
-            assertFalse(applied)
             finishHistory.complete(Unit)
             globalCategories.await()
-            assertFalse(applied)
+            assertThrows<LibraryOperationCoordinator.Unavailable> {
+                coordinator.exclusive { error("unexpected") }
+            }
             finishCategories.complete(Unit)
             snapshotReady.await()
-            exclusive.join()
-            assertTrue(applied)
+            coordinator.exclusive { t.replaceState() }
             assertFalse(backup.isCompleted)
             verify(exactly = 0) { UniFile.fromUri(t.context, t.uri) }
             finishSources.complete(Unit)
@@ -242,6 +243,7 @@ class BackupSnapshotCoordinationTest {
             assertEquals(1f, manga.tracking.single().lastChapterRead)
             assertEquals(1000L, manga.history.single().lastRead)
             assertEquals(listOf(t.category.order), manga.categories)
+            assertEquals(listOf("old scanlator"), manga.excludedScanlators)
             assertEquals("old category", data.backupCategories.single().name)
         }
     }
@@ -337,8 +339,9 @@ class BackupSnapshotCoordinationTest {
     }
 
     @Test
-    fun `cancel during snapshot releases participation without publishing`() = runBlocking {
+    fun `cancel during snapshot releases gate without invalidating generation or publishing`() = runBlocking {
         database { t ->
+            val generation = coordinator.generation
             val history = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
             t.onHistory = {
@@ -348,13 +351,14 @@ class BackupSnapshotCoordinationTest {
             val backup = launch(start = CoroutineStart.UNDISPATCHED) { t.creator.backup(t.uri, options) }
             history.await()
             backup.cancelAndJoin()
+            assertEquals(generation, coordinator.generation)
             coordinator.exclusive { }
             verify(exactly = 0) { UniFile.fromUri(t.context, t.uri) }
         }
     }
 
     @Test
-    fun `nested snapshot completes behind requested exclusive and does not release external lease`() = runBlocking {
+    fun `nested snapshot is rejected without releasing external lease`() = runBlocking {
         database { t ->
             val begin = CompletableDeferred<Unit>()
             val completed = CompletableDeferred<Unit>()
@@ -362,7 +366,9 @@ class BackupSnapshotCoordinationTest {
             val outer = launch(start = CoroutineStart.UNDISPATCHED) {
                 coordinator.operation {
                     begin.await()
-                    t.creator.backup(t.uri, options)
+                    assertThrows<IllegalStateException> { t.creator.backup(t.uri, options) }
+                    assertEquals(0, t.favoriteReads)
+                    verify(exactly = 0) { UniFile.fromUri(t.context, t.uri) }
                     completed.complete(Unit)
                     releaseOuter.await()
                 }
@@ -376,6 +382,93 @@ class BackupSnapshotCoordinationTest {
             outer.join()
             exclusive.join()
             assertTrue(entered)
+        }
+    }
+
+    @Test
+    fun `backup waits for the entire composed writer and captures only the completed state`() = runBlocking {
+        database { t ->
+            val generation = coordinator.generation
+            val firstWrite = CompletableDeferred<Unit>()
+            val finishWriter = CompletableDeferred<Unit>()
+            val writer = launch(start = CoroutineStart.UNDISPATCHED) {
+                coordinator.operation {
+                    t.replaceState {
+                        firstWrite.complete(Unit)
+                        finishWriter.await()
+                    }
+                }
+            }
+            firstWrite.await()
+            val backup = async(start = CoroutineStart.UNDISPATCHED) { t.creator.backup(t.uri, options) }
+            assertFalse(backup.isCompleted)
+            assertEquals(0, t.favoriteReads)
+            assertEquals(0, t.readEntryReads)
+            verify(exactly = 0) { UniFile.fromUri(t.context, t.uri) }
+            finishWriter.complete(Unit)
+            writer.join()
+            backup.await()
+            val data = t.decoded()
+            val manga = data.backupManga.single()
+            assertEquals("restored", manga.title)
+            assertEquals("restored chapter", manga.chapters.single().name)
+            assertTrue(manga.chapters.single().read)
+            assertEquals(5f, manga.tracking.single().lastChapterRead)
+            assertEquals(2000L, manga.history.single().lastRead)
+            assertEquals(listOf(t.category.order), manga.categories)
+            assertEquals("restored category", data.backupCategories.single().name)
+            assertEquals(listOf("restored scanlator"), manga.excludedScanlators)
+            assertEquals(generation, coordinator.generation)
+        }
+    }
+
+    @Test
+    fun `composed writer waits through snapshot reads and backup captures only the prior state`() = runBlocking {
+        database { t ->
+            val generation = coordinator.generation
+            val history = CompletableDeferred<Unit>()
+            val finishHistory = CompletableDeferred<Unit>()
+            val categories = CompletableDeferred<Unit>()
+            val finishCategories = CompletableDeferred<Unit>()
+            t.onHistory = {
+                history.complete(Unit)
+                finishHistory.await()
+            }
+            t.onGlobalCategories = {
+                categories.complete(Unit)
+                finishCategories.await()
+            }
+            val backup = async(start = CoroutineStart.UNDISPATCHED) { t.creator.backup(t.uri, options) }
+            history.await()
+            var wrote = false
+            val writer = launch(start = CoroutineStart.UNDISPATCHED) {
+                coordinator.operation {
+                    // An intent predating this backup remains valid: snapshot cannot advance G.
+                    assertEquals(generation, coordinator.generation)
+                    t.replaceState()
+                    wrote = true
+                }
+            }
+            assertFalse(wrote)
+            finishHistory.complete(Unit)
+            categories.await()
+            assertFalse(wrote)
+            finishCategories.complete(Unit)
+            backup.await()
+            writer.join()
+            assertTrue(wrote)
+            val data = t.decoded()
+            val manga = data.backupManga.single()
+            assertEquals("old", manga.title)
+            assertEquals("old", manga.chapters.single().name)
+            assertFalse(manga.chapters.single().read)
+            assertEquals(1f, manga.tracking.single().lastChapterRead)
+            assertEquals(1000L, manga.history.single().lastRead)
+            assertEquals(listOf(t.category.order), manga.categories)
+            assertEquals("old category", data.backupCategories.single().name)
+            assertEquals(listOf("old scanlator"), manga.excludedScanlators)
+            assertEquals("restored", t.mangas.getMangaById(t.manga.id).title)
+            assertEquals(generation, coordinator.generation)
         }
     }
 }

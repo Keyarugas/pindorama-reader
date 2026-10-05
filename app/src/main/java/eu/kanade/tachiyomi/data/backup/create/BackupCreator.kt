@@ -99,7 +99,7 @@ class BackupCreator(
 
     private suspend fun buildBackup(options: BackupOptions, allowPrivate: Boolean): Backup {
         val (backupManga, backupCategories) = if (options.libraryEntries || options.categories) {
-            LibraryOperationCoordinator.shared.operation { createLibrarySnapshot(options, allowPrivate) }
+            LibraryOperationCoordinator.shared.snapshot { createLibrarySnapshot(options, allowPrivate) }
         } else {
             emptyList<BackupManga>() to emptyList<BackupCategory>()
         }

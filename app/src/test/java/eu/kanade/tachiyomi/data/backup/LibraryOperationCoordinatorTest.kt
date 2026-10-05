@@ -20,6 +20,151 @@ import tachiyomi.core.common.util.lang.LibraryOperationCoordinator
 
 class LibraryOperationCoordinatorTest {
     @Test
+    fun `snapshot drains admitted participants and blocks new ones without changing generation`() = runTest {
+        val coordinator = LibraryOperationCoordinator()
+        val generation = coordinator.generation
+        val finishWriter = CompletableDeferred<Unit>()
+        val finishSnapshot = CompletableDeferred<Unit>()
+        val events = mutableListOf<String>()
+        val writer = launch {
+            coordinator.operation {
+                events += "writer-start"
+                finishWriter.await()
+                events += "writer-end"
+            }
+        }
+        runCurrent()
+        val snapshot = async {
+            coordinator.snapshot {
+                events += "snapshot"
+                finishSnapshot.await()
+                "captured"
+            }
+        }
+        runCurrent()
+        val next = async {
+            coordinator.operation {
+                events += "next-writer"
+                coordinator.generation
+            }
+        }
+        runCurrent()
+        assertEquals(listOf("writer-start"), events)
+        finishWriter.complete(Unit)
+        writer.join()
+        runCurrent()
+        assertEquals(listOf("writer-start", "writer-end", "snapshot"), events)
+        assertFalse(next.isCompleted)
+        finishSnapshot.complete(Unit)
+        assertEquals("captured", snapshot.await())
+        assertEquals(generation, next.await())
+        assertEquals(generation, coordinator.generation)
+        assertEquals(listOf("writer-start", "writer-end", "snapshot", "next-writer"), events)
+    }
+
+    @Test
+    fun `snapshot waits for restore and another snapshot while exclusive refuses an occupied gate`() = runTest {
+        val coordinator = LibraryOperationCoordinator()
+        val generation = coordinator.generation
+        val finishRestore = CompletableDeferred<Unit>()
+        val finishSnapshot = CompletableDeferred<Unit>()
+        val restore = launch { coordinator.exclusive { finishRestore.await() } }
+        runCurrent()
+        val snapshot = async {
+            coordinator.snapshot {
+                finishSnapshot.await()
+                coordinator.generation
+            }
+        }
+        runCurrent()
+        assertFalse(snapshot.isCompleted)
+        finishRestore.complete(Unit)
+        restore.join()
+        runCurrent()
+        assertThrows<LibraryOperationCoordinator.Unavailable> { coordinator.exclusive { error("unexpected") } }
+        val nextSnapshot = async { coordinator.snapshot { coordinator.generation } }
+        runCurrent()
+        assertFalse(nextSnapshot.isCompleted)
+        finishSnapshot.complete(Unit)
+        assertEquals(generation + 1, snapshot.await())
+        assertEquals(generation + 1, nextSnapshot.await())
+        assertEquals(generation + 1, coordinator.generation)
+    }
+
+    @Test
+    fun `snapshot cancellation while draining releases admission without invalidating active writer`() = runTest {
+        val coordinator = LibraryOperationCoordinator()
+        val generation = coordinator.generation
+        val release = CompletableDeferred<Unit>()
+        val writer = launch { coordinator.operation { release.await() } }
+        runCurrent()
+        val snapshot = launch { coordinator.snapshot { error("unexpected") } }
+        runCurrent()
+        snapshot.cancelAndJoin()
+        assertEquals(generation, coordinator.generation)
+        assertTrue(writer.isActive)
+        coordinator.operation { }
+        release.complete(Unit)
+        writer.join()
+        coordinator.snapshot { }
+    }
+
+    @Test
+    fun `cancelling a snapshot waiting for another gate does not release that gate`() = runTest {
+        val coordinator = LibraryOperationCoordinator()
+        val generation = coordinator.generation
+        val release = CompletableDeferred<Unit>()
+        val snapshot = launch { coordinator.snapshot { release.await() } }
+        runCurrent()
+        val waiting = launch { coordinator.snapshot { error("unexpected") } }
+        runCurrent()
+        waiting.cancelAndJoin()
+        val writer = async { coordinator.operation { coordinator.generation } }
+        runCurrent()
+        assertFalse(writer.isCompleted)
+        assertThrows<LibraryOperationCoordinator.Unavailable> { coordinator.exclusive { error("unexpected") } }
+        release.complete(Unit)
+        snapshot.join()
+        assertEquals(generation, writer.await())
+    }
+
+    @Test
+    fun `failure and cancellation inside snapshot release admission without generation change`() = runTest {
+        val coordinator = LibraryOperationCoordinator()
+        val generation = coordinator.generation
+        assertThrows<IllegalStateException> { coordinator.snapshot { error("synthetic") } }
+        assertEquals(generation, coordinator.generation)
+        coordinator.operation { }
+        val release = CompletableDeferred<Unit>()
+        val snapshot = launch { coordinator.snapshot { release.await() } }
+        runCurrent()
+        val writer = async { coordinator.operation { coordinator.generation } }
+        runCurrent()
+        assertFalse(writer.isCompleted)
+        snapshot.cancelAndJoin()
+        assertEquals(generation, writer.await())
+        coordinator.snapshot { }
+        coordinator.exclusive { }
+    }
+
+    @Test
+    fun `snapshot rejects nesting and participating writes without releasing its gate`() = runTest {
+        val coordinator = LibraryOperationCoordinator()
+        val generation = coordinator.generation
+        coordinator.operation {
+            assertThrows<IllegalStateException> { coordinator.snapshot { error("unexpected") } }
+            coordinator.operation { }
+        }
+        coordinator.snapshot {
+            assertThrows<IllegalStateException> { coordinator.snapshot { error("unexpected") } }
+            assertThrows<IllegalStateException> { coordinator.operation { error("unexpected") } }
+            assertThrows<IllegalStateException> { coordinator.exclusive { error("unexpected") } }
+        }
+        assertEquals(generation, coordinator.generation)
+        coordinator.operation { }
+    }
+
+    @Test
     fun `snapshots before and during exclusive expire before blocked participants resume`() = runTest {
         val coordinator = LibraryOperationCoordinator()
         val before = coordinator.generation

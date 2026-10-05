@@ -27,7 +27,10 @@ class LibraryOperationCoordinator {
     /** Capture with a retained snapshot. Recheck inside operation(), before reading or writing. */
     val generation: Long get() = synchronized(monitor) { epoch }
 
-    private class Lease(val coordinator: LibraryOperationCoordinator) : AbstractCoroutineContextElement(Key) {
+    private class Lease(
+        val coordinator: LibraryOperationCoordinator,
+        val readOnly: Boolean = false,
+    ) : AbstractCoroutineContextElement(Key) {
         @Volatile var valid = true
 
         companion object Key : CoroutineContext.Key<Lease>
@@ -38,6 +41,7 @@ class LibraryOperationCoordinator {
         val inherited = currentCoroutineContext()[Lease]
         if (inherited?.coordinator === this) {
             check(inherited.valid) { "EXPIRED_LIBRARY_OPERATION" }
+            check(!inherited.readOnly) { "LIBRARY_OPERATION_IN_SNAPSHOT" }
             return block()
         }
         while (true) {
@@ -66,7 +70,37 @@ class LibraryOperationCoordinator {
     }
 
     /**
-     * Refuses another exclusive requester immediately; drains existing operations for at most
+     * Waits for the admission gate, then drains participants and reads alone. Unlike exclusive(),
+     * this read-only boundary never invalidates generations. Waiting remains cancellable.
+     * Nesting is rejected: promoting a participant could deadlock or expose another writer.
+     */
+    suspend fun <T> snapshot(block: suspend () -> T): T {
+        check(currentCoroutineContext()[Lease]?.coordinator !== this) { "NESTED_LIBRARY_SNAPSHOT" }
+        currentCoroutineContext().ensureActive()
+        while (true) {
+            val wait = synchronized(monitor) {
+                if (exclusiveRequested) {
+                    changed
+                } else {
+                    exclusiveRequested = true
+                    null
+                }
+            }
+            if (wait == null) break
+            wait.await()
+        }
+        val lease = Lease(this, readOnly = true)
+        try {
+            awaitParticipants()
+            currentCoroutineContext().ensureActive()
+            return withContext(lease) { block() }
+        } finally {
+            releaseGate(lease, invalidateGeneration = false)
+        }
+    }
+
+    /**
+     * Refuses an already reserved snapshot/restore gate immediately; drains operations for at most
      * [waitMillis]. Timeout covers admission only, never interrupts a transaction arbitrarily.
      * Compatibility checks belong inside [block], before beginning a transaction.
      */
@@ -82,11 +116,7 @@ class LibraryOperationCoordinator {
         var applicationStarted = false
         try {
             val acquired = withTimeoutOrNull(waitMillis) {
-                while (true) {
-                    val wait = synchronized(monitor) { if (active == 0) null else changed }
-                    if (wait == null) break
-                    wait.await()
-                }
+                awaitParticipants()
                 true
             } ?: false
             if (!acquired) throw Unavailable()
@@ -96,16 +126,28 @@ class LibraryOperationCoordinator {
                 block()
             }
         } finally {
-            lease.valid = false
-            val signal = synchronized(monitor) {
-                // Invalidate snapshots captured before or during application, even on failure.
-                // Publish atomically with admission release, before waking participants.
-                if (applicationStarted) epoch++
-                exclusiveRequested = false
-                nextSignal()
-            }
-            signal.complete(Unit)
+            releaseGate(lease, invalidateGeneration = applicationStarted)
         }
+    }
+
+    private suspend fun awaitParticipants() {
+        while (true) {
+            val wait = synchronized(monitor) { if (active == 0) null else changed }
+            if (wait == null) return
+            wait.await()
+        }
+    }
+
+    private fun releaseGate(lease: Lease, invalidateGeneration: Boolean) {
+        lease.valid = false
+        val signal = synchronized(monitor) {
+            // Invalidate snapshots captured before or during restore, even on failure.
+            // Publish atomically with admission release, before waking participants.
+            if (invalidateGeneration) epoch++
+            exclusiveRequested = false
+            nextSignal()
+        }
+        signal.complete(Unit)
     }
 
     // Called under monitor; resume waiters outside it (including Unconfined continuations).
