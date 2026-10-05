@@ -70,9 +70,15 @@ dados sensíveis sem criptografia. Mantenha cópias seguras antes de atualizar.
 ## Distribuição e desenvolvimento
 
 O repositório do projeto é [Keyarugas/pindorama-reader](https://github.com/Keyarugas/pindorama-reader).
-A última release pública é a [Pindorama! 0.2 Alpha 1](https://github.com/Keyarugas/pindorama-reader/releases/tag/v0.2.0-alpha.1).
-O código atual está à frente dessa release e prepara a Pindorama! 0.5 Alpha 1;
-os ciclos 0.3 e 0.4 foram desenvolvimento interno, sem releases públicas.
+A release pública mais recente é a **Pindorama! 0.5 Alpha 1**.
+
+- [Pindorama! 0.5 Alpha 1](https://github.com/Keyarugas/pindorama-reader/releases/tag/v0.5.0-alpha.1): nova fase de privacidade, com Biblioteca Privada e backup/restauração protegidos.
+- [Pindorama! 0.2 Alpha 1](https://github.com/Keyarugas/pindorama-reader/releases/tag/v0.2.0-alpha.1): nova página Início.
+- [Pindorama! 0.1 Alpha 3](https://github.com/Keyarugas/pindorama-reader/releases/tag/v0.1.0-alpha.3): versão experimental anterior, com identidade e tema próprios.
+
+A branch `main` pode conter desenvolvimento posterior à release pública atual;
+consulte as notas de cada versão para saber o que está incluído nos APKs.
+Os ciclos 0.3 e 0.4 foram desenvolvimento interno, sem releases públicas.
 Os APKs debug gerados pela CI são artefatos de teste, não releases de distribuição.
 O signing próprio de release já está configurado; consulte
 [docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md). A CI atual gera APKs debug e
